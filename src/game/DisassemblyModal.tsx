@@ -1,25 +1,37 @@
-import React, { useEffect, useRef, useState } from 'react';
-import { View, Text, StyleSheet } from 'react-native';
-import { Gesture, GestureDetector } from 'react-native-gesture-handler';
+import * as Haptics from "expo-haptics";
+import { useEffect, useRef, useState } from "react";
+import { Image, StyleSheet, Text, View } from "react-native";
+import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import Animated, {
-  useSharedValue,
-  useAnimatedStyle,
-  useDerivedValue,
-  withTiming,
-  withSpring,
-  withSequence,
-  runOnJS,
   Easing,
-} from 'react-native-reanimated';
-import * as Haptics from 'expo-haptics';
+  runOnJS,
+  useAnimatedStyle,
+  useSharedValue,
+  withSequence,
+  withSpring,
+  withTiming,
+} from "react-native-reanimated";
 import {
-  C, SW, SH, BX, BY, BW, BH,
-  BIN_W, BIN_H, BIN_GAP, BIN_BOTTOM, binX, binY,
-  Pulse, Burst,
-} from '../spike/effects';
-import { ModalBottle } from '../spike/BottleArt';
-import { BINS, BinId, ItemDef, PartDef } from './items';
-import { hitBinPoint } from './binHit';
+  BH,
+  BIN_BOTTOM,
+  BIN_GAP,
+  BIN_H,
+  BIN_W,
+  binX,
+  binY,
+  Burst,
+  BW,
+  BX,
+  BY,
+  C,
+  Pulse,
+  SH,
+  SW,
+} from "../spike/effects";
+import { hitBinPoint } from "./binHit";
+import { BinId, BINS, ItemDef, PartDef } from "./items";
+import { SpriteBottle } from "./SpriteBottle";
+import { BIN_SPRITES, BOTTLE_CAP_CHIP, BOTTLE_WRAP_CHIP } from "./sprites";
 
 /*
  * Phase 3: production disassembly modal.
@@ -36,7 +48,7 @@ import { hitBinPoint } from './binHit';
 const TWIST_TARGET = Math.PI * 1.25;
 const PEEL_DIST = 150;
 
-type PartId = 'cap' | 'wrapper' | 'body';
+type PartId = "cap" | "wrapper" | "body";
 
 const CAP = { x: BX + 43, y: BY - 53, w: 64, h: 40 };
 const WRAP = { x: BX + 10, y: BY + 94, w: 130, h: 84 };
@@ -68,14 +80,16 @@ export function DisassemblyModal({
   const PART_LABEL: Record<PartId, string> = Object.fromEntries(
     parts.map((p) => [p.id, p.label]),
   ) as Record<PartId, string>;
-  const [step, setStep] = useState<'prep' | 'sort' | 'done'>('prep');
+  const [step, setStep] = useState<"prep" | "sort" | "done">("prep");
   const [capGone, setCapGone] = useState(false);
   const [wrapGone, setWrapGone] = useState(false);
   const [capChip, setCapChip] = useState(false);
   const [wrapChip, setWrapChip] = useState(false);
   const [sortedIds, setSortedIds] = useState<PartId[]>([]);
   const [hint, setHint] = useState<string | null>(null);
-  const [bursts, setBursts] = useState<{ id: number; x: number; y: number }[]>([]);
+  const [bursts, setBursts] = useState<{ id: number; x: number; y: number }[]>(
+    [],
+  );
   const burstId = useRef(0);
   const wrongRef = useRef(0);
 
@@ -86,7 +100,11 @@ export function DisassemblyModal({
   const mTy = useSharedValue(origin.y - SH / 2);
   const mStyle = useAnimatedStyle(() => ({
     opacity: mOp.value,
-    transform: [{ translateX: mTx.value }, { translateY: mTy.value }, { scale: mScale.value }],
+    transform: [
+      { translateX: mTx.value },
+      { translateY: mTy.value },
+      { scale: mScale.value },
+    ],
   }));
   useEffect(() => {
     const e = Easing.out(Easing.cubic);
@@ -109,11 +127,6 @@ export function DisassemblyModal({
   const peelLive = useSharedValue(true);
   const bodyLive = useSharedValue(false);
 
-  const wrapH = useDerivedValue(() => 92 * (1 - peelProg.value));
-  const flapH = useDerivedValue(() => 92 * peelProg.value);
-  const flapY = useDerivedValue(() => 150 + 92 * (1 - peelProg.value));
-  const capX = useDerivedValue(() => 65 + capWig.value);
-  const capY = useDerivedValue(() => 8 - twistProg.value * 14);
   const twistBar = useAnimatedStyle(() => ({ width: twistProg.value * 220 }));
 
   // chip drag positions
@@ -129,9 +142,16 @@ export function DisassemblyModal({
     body: { tx: bodyTx, ty: bodyTy },
   };
 
-  const binRects = useSharedValue<{ x: number; y: number; w: number; h: number }[]>([]);
+  const binRects = useSharedValue<
+    { x: number; y: number; w: number; h: number }[]
+  >([]);
   useEffect(() => {
-    binRects.value = [0, 1, 2].map((i) => ({ x: binX(i), y: binY, w: BIN_W, h: BIN_H }));
+    binRects.value = [0, 1, 2].map((i) => ({
+      x: binX(i),
+      y: binY,
+      w: BIN_W,
+      h: BIN_H,
+    }));
   }, []);
 
   // named fn on the JS side: worklets can't schedule inline closures
@@ -145,7 +165,7 @@ export function DisassemblyModal({
     setCapChip(true);
     setHint(null);
     if (wrapGone) {
-      setStep('sort');
+      setStep("sort");
       bodyLive.value = true;
     }
   };
@@ -156,7 +176,7 @@ export function DisassemblyModal({
     setWrapChip(true);
     setHint(null);
     if (capGone) {
-      setStep('sort');
+      setStep("sort");
       bodyLive.value = true;
     }
   };
@@ -172,7 +192,7 @@ export function DisassemblyModal({
       if (n.length === 3) {
         setTimeout(() => {
           Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-          setStep('done');
+          setStep("done");
           setTimeout(() => onClose(wrongRef.current === 0), 650);
         }, 450);
       }
@@ -236,7 +256,10 @@ export function DisassemblyModal({
     })
     .onUpdate((e) => {
       if (!peelLive.value) return;
-      peelProg.value = Math.max(0, Math.min(1, peelStart.value + e.translationY / PEEL_DIST));
+      peelProg.value = Math.max(
+        0,
+        Math.min(1, peelStart.value + e.translationY / PEEL_DIST),
+      );
     })
     .onEnd(() => {
       if (!peelLive.value) return;
@@ -290,7 +313,11 @@ export function DisassemblyModal({
       <Animated.View style={[styles.backdrop, { opacity: mOp }]} />
       <Animated.View style={[styles.modalContent, mStyle]}>
         <Text style={styles.stepKicker}>
-          {step === 'done' ? 'done' : step === 'prep' ? 'step 1 of 2 · prep' : 'step 2 of 2 · sort'}
+          {step === "done"
+            ? "done"
+            : step === "prep"
+              ? "step 1 of 2 · prep"
+              : "step 2 of 2 · sort"}
         </Text>
 
         {/* belt ticker: next 3 queued items + red edge on near fall-off */}
@@ -304,11 +331,16 @@ export function DisassemblyModal({
                   <View
                     style={[
                       styles.tickerDot,
-                      { backgroundColor: t.color, borderRadius: t.shape === 'circle' ? 12 : 6 },
-                      t.shape === 'diamond' && styles.tickerDiamond,
+                      {
+                        backgroundColor: t.color,
+                        borderRadius: t.shape === "circle" ? 12 : 6,
+                      },
+                      t.shape === "diamond" && styles.tickerDiamond,
                     ]}
                   />
-                  <Text style={styles.tickerName} numberOfLines={1}>{t.name}</Text>
+                  <Text style={styles.tickerName} numberOfLines={1}>
+                    {t.name}
+                  </Text>
                 </View>
               ) : null,
             )}
@@ -322,15 +354,15 @@ export function DisassemblyModal({
         )}
 
         <Text style={styles.instruction}>
-          {step === 'prep'
-            ? 'Twist the cap and peel the wrapper — either order'
-            : step === 'sort'
-              ? 'Sort the parts — drag each to its bin'
-              : 'Nice work!'}
+          {step === "prep"
+            ? "Twist the cap and peel the wrapper — either order"
+            : step === "sort"
+              ? "Sort the parts — drag each to its bin"
+              : "Nice work!"}
         </Text>
         {hint && <Text style={styles.hint}>{hint}</Text>}
 
-        {step === 'prep' && (
+        {step === "prep" && (
           <View style={styles.progWrap}>
             <View style={styles.progTrack}>
               <Animated.View style={[styles.progFill, twistBar]} />
@@ -339,15 +371,29 @@ export function DisassemblyModal({
         )}
 
         {/* bottle body (draggable once parts are off; unmounts when sorted) */}
-        {!sortedIds.includes('body') && (
-          <GestureDetector gesture={chipPan('body', bodyTx, bodyTy, BX - 20, BY - 60, 190, 380, bodyLive)}>
-            <Animated.View style={[{ position: 'absolute', left: BX - 20, top: BY - 60 }, bodyStyle]}>
-              <ModalBottle
-                capX={capX}
-                capY={capY}
-                wrapH={wrapH}
-                flapY={flapY}
-                flapH={flapH}
+        {!sortedIds.includes("body") && (
+          <GestureDetector
+            gesture={chipPan(
+              "body",
+              bodyTx,
+              bodyTy,
+              BX - 50,
+              BY - 120,
+              250,
+              500,
+              bodyLive,
+            )}
+          >
+            <Animated.View
+              style={[
+                { position: "absolute", left: BX - 50, top: BY - 120 },
+                bodyStyle,
+              ]}
+            >
+              <SpriteBottle
+                twistProg={twistProg}
+                capWig={capWig}
+                peelProg={peelProg}
                 capGone={capGone}
                 wrapGone={wrapGone}
               />
@@ -356,41 +402,113 @@ export function DisassemblyModal({
         )}
 
         {/* twist zone over the cap */}
-        {step === 'prep' && !capGone && (
+        {step === "prep" && !capGone && (
           <GestureDetector gesture={twistGesture}>
-            <View style={{ position: 'absolute', left: BX - 10, top: BY - 80, width: 170, height: 120 }} />
+            <View
+              style={{
+                position: "absolute",
+                left: BX - 10,
+                top: BY - 80,
+                width: 170,
+                height: 120,
+              }}
+            />
           </GestureDetector>
         )}
-        {step === 'prep' && !capGone && (
-          <View style={{ position: 'absolute', left: SW / 2 - 38, top: BY - 52 }}>
+        {step === "prep" && !capGone && (
+          <View
+            style={{ position: "absolute", left: SW / 2 - 38, top: BY - 12 }}
+          >
             <Pulse size={76} color={C.gold} />
           </View>
         )}
 
         {/* peel zone over the wrapper */}
-        {step === 'prep' && !wrapGone && (
+        {step === "prep" && !wrapGone && (
           <GestureDetector gesture={peelGesture}>
-            <View style={{ position: 'absolute', left: BX, top: BY + 60, width: BW, height: 170 }} />
+            <View
+              style={{
+                position: "absolute",
+                left: BX,
+                top: BY + 60,
+                width: BW,
+                height: 170,
+              }}
+            />
           </GestureDetector>
         )}
-        {step === 'prep' && !wrapGone && (
-          <View style={{ position: 'absolute', left: SW / 2 - 38, top: BY + 108 }}>
+        {step === "prep" && !wrapGone && (
+          <View
+            style={{ position: "absolute", left: SW / 2 - 38, top: BY + 108 }}
+          >
             <Pulse size={76} color={C.gold} />
           </View>
         )}
 
         {/* parts chips */}
-        {capChip && !sortedIds.includes('cap') && (
-          <GestureDetector gesture={chipPan('cap', capTx, capTy, CAP.x, CAP.y, CAP.w, CAP.h, null)}>
-            <Animated.View style={[styles.chip, { left: CAP.x, top: CAP.y, width: CAP.w, height: CAP.h, backgroundColor: C.cap }, capStyle]}>
-              <Text style={styles.chipLabel}>{PART_LABEL.cap ?? 'cap'}</Text>
+        {capChip && !sortedIds.includes("cap") && (
+          <GestureDetector
+            gesture={chipPan(
+              "cap",
+              capTx,
+              capTy,
+              SW - 70,
+              BY - 50,
+              80,
+              60,
+              null,
+            )}
+          >
+            <Animated.View
+              style={[
+                {
+                  position: "absolute",
+                  left: SW - 200,
+                  top: BY + 130,
+                  width: 184,
+                  height: 138,
+                },
+                capStyle,
+              ]}
+            >
+              <Image
+                source={BOTTLE_CAP_CHIP}
+                style={{ width: "100%", height: "100%" }}
+                resizeMode="contain"
+              />
             </Animated.View>
           </GestureDetector>
         )}
-        {wrapChip && !sortedIds.includes('wrapper') && (
-          <GestureDetector gesture={chipPan('wrapper', wrapTx, wrapTy, WRAP.x, WRAP.y, WRAP.w, WRAP.h, null)}>
-            <Animated.View style={[styles.chip, { left: WRAP.x, top: WRAP.y, width: WRAP.w, height: WRAP.h, backgroundColor: C.wrapper }, wrapStyle]}>
-              <Text style={styles.chipLabel}>{PART_LABEL.wrapper ?? 'label'}</Text>
+        {wrapChip && !sortedIds.includes("wrapper") && (
+          <GestureDetector
+            gesture={chipPan(
+              "wrapper",
+              wrapTx,
+              wrapTy,
+              0,
+              BY + 85,
+              120,
+              131,
+              null,
+            )}
+          >
+            <Animated.View
+              style={[
+                {
+                  position: "absolute",
+                  left: 20,
+                  top: BY + 85,
+                  width: 120,
+                  height: 131,
+                },
+                wrapStyle,
+              ]}
+            >
+              <Image
+                source={BOTTLE_WRAP_CHIP}
+                style={{ width: "100%", height: "100%" }}
+                resizeMode="contain"
+              />
             </Animated.View>
           </GestureDetector>
         )}
@@ -398,8 +516,12 @@ export function DisassemblyModal({
         {/* in-modal bins (same 3 streams as the main screen) */}
         <View style={styles.bins}>
           {BINS.map((b) => (
-            <View key={b.id} style={[styles.bin, { backgroundColor: b.color }]}>
-              <Text style={styles.binLabel}>{b.label}</Text>
+            <View key={b.id} style={styles.bin}>
+              <Image
+                source={BIN_SPRITES[b.id]}
+                style={{ width: BIN_W, height: BIN_H }}
+                resizeMode="contain"
+              />
             </View>
           ))}
         </View>
@@ -413,70 +535,118 @@ export function DisassemblyModal({
 }
 
 const styles = StyleSheet.create({
-  modalWrap: { position: 'absolute', left: 0, right: 0, top: 0, bottom: 0 },
+  modalWrap: { position: "absolute", left: 0, right: 0, top: 0, bottom: 0 },
   backdrop: {
-    position: 'absolute', left: 0, right: 0, top: 0, bottom: 0,
-    backgroundColor: 'rgba(46,36,28,0.55)',
+    position: "absolute",
+    left: 0,
+    right: 0,
+    top: 0,
+    bottom: 0,
+    backgroundColor: "rgba(46,36,28,0.55)",
   },
-  modalContent: { position: 'absolute', left: 0, right: 0, top: 0, bottom: 0 },
+  modalContent: { position: "absolute", left: 0, right: 0, top: 0, bottom: 0 },
   stepKicker: {
-    textAlign: 'center', marginTop: 74, fontSize: 12, fontWeight: '700',
-    letterSpacing: 2, color: '#fff', opacity: 0.85,
+    textAlign: "center",
+    marginTop: 74,
+    fontSize: 12,
+    fontWeight: "700",
+    letterSpacing: 2,
+    color: "#fff",
+    opacity: 0.85,
   },
   ticker: {
     marginTop: 10,
     marginHorizontal: 40,
-    backgroundColor: 'rgba(255,255,255,0.12)',
+    backgroundColor: "rgba(255,255,255,0.12)",
     borderRadius: 12,
     paddingVertical: 8,
     paddingHorizontal: 12,
-    overflow: 'hidden',
+    overflow: "hidden",
   },
   tickerDanger: {
-    position: 'absolute', left: 0, top: 0, bottom: 0, width: 8,
-    backgroundColor: '#E05A4B',
+    position: "absolute",
+    left: 0,
+    top: 0,
+    bottom: 0,
+    width: 8,
+    backgroundColor: "#E05A4B",
   },
-  tickerLabel: { fontSize: 10, fontWeight: '800', letterSpacing: 2, color: 'rgba(255,255,255,0.7)' },
-  tickerRow: { flexDirection: 'row', marginTop: 6, gap: 14 },
-  tickerItem: { flexDirection: 'row', alignItems: 'center', gap: 6, flex: 1 },
+  tickerLabel: {
+    fontSize: 10,
+    fontWeight: "800",
+    letterSpacing: 2,
+    color: "rgba(255,255,255,0.7)",
+  },
+  tickerRow: { flexDirection: "row", marginTop: 6, gap: 14 },
+  tickerItem: { flexDirection: "row", alignItems: "center", gap: 6, flex: 1 },
   tickerDot: { width: 24, height: 24 },
-  tickerDiamond: { transform: [{ rotate: '45deg' }] },
-  tickerName: { fontSize: 11, fontWeight: '600', color: '#fff', flexShrink: 1 },
+  tickerDiamond: { transform: [{ rotate: "45deg" }] },
+  tickerName: { fontSize: 11, fontWeight: "600", color: "#fff", flexShrink: 1 },
   pausedPill: {
-    alignSelf: 'center',
+    alignSelf: "center",
     marginTop: 10,
-    backgroundColor: 'rgba(255,255,255,0.92)',
+    backgroundColor: "rgba(255,255,255,0.92)",
     borderRadius: 20,
     paddingHorizontal: 16,
     paddingVertical: 7,
   },
-  pausedText: { fontSize: 13, fontWeight: '700', color: C.ink },
+  pausedText: { fontSize: 13, fontWeight: "700", color: C.ink },
   instruction: {
-    textAlign: 'center', marginTop: 10, fontSize: 18, fontWeight: '800',
-    color: '#fff', paddingHorizontal: 40,
+    textAlign: "center",
+    marginTop: 10,
+    fontSize: 18,
+    fontWeight: "800",
+    color: "#fff",
+    paddingHorizontal: 40,
   },
   hint: {
-    textAlign: 'center', marginTop: 8, fontSize: 15, fontWeight: '600',
-    color: '#FFD9A8', paddingHorizontal: 40,
+    textAlign: "center",
+    marginTop: 8,
+    fontSize: 15,
+    fontWeight: "600",
+    color: "#FFD9A8",
+    paddingHorizontal: 40,
   },
-  progWrap: { alignItems: 'center', marginTop: 10 },
+  progWrap: { alignItems: "center", marginTop: 10 },
   progTrack: {
-    width: 220, height: 10, borderRadius: 5,
-    backgroundColor: 'rgba(255,255,255,0.25)', overflow: 'hidden',
+    width: 220,
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: "rgba(255,255,255,0.25)",
+    overflow: "hidden",
   },
   progFill: { height: 10, borderRadius: 5, backgroundColor: C.gold },
   chip: {
-    position: 'absolute', borderRadius: 12, justifyContent: 'center', alignItems: 'center',
-    shadowColor: '#000', shadowOpacity: 0.18, shadowRadius: 8, shadowOffset: { width: 0, height: 3 },
+    position: "absolute",
+    borderRadius: 12,
+    justifyContent: "center",
+    alignItems: "center",
+    shadowColor: "#000",
+    shadowOpacity: 0.18,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 3 },
   },
-  chipLabel: { color: '#fff', fontWeight: '800', fontSize: 14 },
+  chipLabel: { color: "#fff", fontWeight: "800", fontSize: 14 },
   bins: {
-    position: 'absolute', left: 0, right: 0, bottom: BIN_BOTTOM,
-    flexDirection: 'row', justifyContent: 'center', gap: BIN_GAP,
+    position: "absolute",
+    left: 0,
+    right: 0,
+    bottom: BIN_BOTTOM,
+    flexDirection: "row",
+    justifyContent: "center",
+    gap: BIN_GAP,
   },
   bin: {
-    width: BIN_W, height: BIN_H, borderRadius: 16,
-    justifyContent: 'center', alignItems: 'center',
+    width: BIN_W,
+    height: BIN_H,
+    justifyContent: "center",
+    alignItems: "center",
   },
-  binLabel: { color: '#fff', fontWeight: '800', fontSize: 15 },
-})
+  binLabel: {
+    position: "absolute",
+    bottom: 10,
+    color: "#4A3F35",
+    fontWeight: "800",
+    fontSize: 15,
+  },
+});

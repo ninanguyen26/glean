@@ -32,10 +32,10 @@ export const BX = SW / 2 - BW / 2;
 export const BY = SH * 0.3;
 
 // Mini-bin geometry (must match the bins row layout in SpikeScreen)
-export const BIN_W = 104;
-export const BIN_H = 92;
-export const BIN_GAP = 12;
-export const BIN_BOTTOM = 96;
+export const BIN_W = 124;
+export const BIN_H = 112;
+export const BIN_GAP = 6;
+export const BIN_BOTTOM = 100;
 export const binX = (i: number) => (SW - (3 * BIN_W + 2 * BIN_GAP)) / 2 + i * (BIN_W + BIN_GAP);
 export const binY = SH - BIN_BOTTOM - BIN_H;
 

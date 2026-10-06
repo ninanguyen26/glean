@@ -1,28 +1,51 @@
-import React, { useEffect, useRef, useState } from 'react';
-import { View, Text, StyleSheet, Pressable } from 'react-native';
-import { Gesture, GestureDetector } from 'react-native-gesture-handler';
+import * as Haptics from "expo-haptics";
+import { useEffect, useRef, useState } from "react";
+import { Image, Pressable, StyleSheet, Text, View } from "react-native";
+import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import Animated, {
-  useSharedValue,
-  useAnimatedStyle,
-  useAnimatedReaction,
-  withTiming,
-  withSpring,
-  withSequence,
-  withRepeat,
-  runOnJS,
   Easing,
-} from 'react-native-reanimated';
-import * as Haptics from 'expo-haptics';
+  runOnJS,
+  useAnimatedReaction,
+  useAnimatedStyle,
+  useSharedValue,
+  withRepeat,
+  withSequence,
+  withSpring,
+  withTiming,
+} from "react-native-reanimated";
 import {
-  C, SW, BIN_W, BIN_H, BIN_GAP, BIN_BOTTOM, binX, binY,
+  BIN_BOTTOM,
+  BIN_GAP,
+  BIN_H,
+  BIN_W,
+  binX,
+  binY,
   Burst,
-} from '../spike/effects';
-import { BINS, GameItem, ItemDef } from './items';
-import { ItemGlyph } from './ItemGlyph';
-import { BinRect } from './binHit';
-import { DisassemblyModal } from './DisassemblyModal';
-import { SinkBasin, RackSlot, SinkItem, SinkStatus, basinRect, RACK, RACK_CAP } from './SinkView';
-import { loadUnionItems, getActiveSeason, loadSeasonalItems, drawSeasonal, markItemSeen, SeasonDef } from './db';
+  C,
+  SW,
+} from "../spike/effects";
+import { DisassemblyModal } from "./DisassemblyModal";
+import { ItemGlyph } from "./ItemGlyph";
+import {
+  basinRect,
+  RACK,
+  RACK_CAP,
+  RackSlot,
+  SinkBasin,
+  SinkItem,
+  SinkStatus,
+} from "./SinkView";
+import { BinRect } from "./binHit";
+import {
+  drawSeasonal,
+  getActiveSeason,
+  loadSeasonalItems,
+  loadUnionItems,
+  markItemSeen,
+  SeasonDef,
+} from "./db";
+import { BINS, GameItem, ItemDef } from "./items";
+import { BIN_SPRITES } from "./sprites";
 
 /*
  * Phase 6: belt loop as a parameterized shift — region pool, workweek day
@@ -54,6 +77,9 @@ const SHIFT_ITEMS = 20;
 const CHEV_GAP = 44;
 const ENDLESS_LIVES = 3;
 
+// DEBUG: spawn only bottles (skip the full game loop when testing the modal)
+const DEBUG_BOTTLE_ONLY = false;
+
 // prep drop zone (main screen, between belt and sink)
 const PREP = { x: SW / 2 - 110, y: 432, w: 220, h: 92 };
 
@@ -79,7 +105,13 @@ function BeltItem({
   binRects: any;
   prepRect: BinRect;
   paused: boolean;
-  onDrop: (key: number, defId: string, binIdx: number, x: number, y: number) => void;
+  onDrop: (
+    key: number,
+    defId: string,
+    binIdx: number,
+    x: number,
+    y: number,
+  ) => void;
   onMissed: (key: number, defId: string) => void;
   onPrep: (key: number, def: GameItem, x: number, y: number) => void;
   onDanger: (key: number) => void;
@@ -97,15 +129,19 @@ function BeltItem({
   const dangerSent = useSharedValue(false);
 
   const startTravel = () => {
-    'worklet';
+    "worklet";
     const dist = bx.value - MISS_X;
     if (dist <= 0) return;
-    bx.value = withTiming(MISS_X, { duration: (dist / SPEED) * 1000, easing: Easing.linear }, (finished) => {
-      if (finished && !settled.value) {
-        settled.value = true;
-        runOnJS(onMissed)(itemKey, def.id);
-      }
-    });
+    bx.value = withTiming(
+      MISS_X,
+      { duration: (dist / SPEED) * 1000, easing: Easing.linear },
+      (finished) => {
+        if (finished && !settled.value) {
+          settled.value = true;
+          runOnJS(onMissed)(itemKey, def.id);
+        }
+      },
+    );
   };
 
   useEffect(() => {
@@ -133,29 +169,40 @@ function BeltItem({
   );
 
   const inPrep = (cx: number, cy: number) => {
-    'worklet';
+    "worklet";
     const r = prepRect;
     return cx >= r.x && cx <= r.x + r.w && cy >= r.y && cy <= r.y + r.h;
   };
 
   const hitBin = (cx: number, cy: number) => {
-    'worklet';
+    "worklet";
     const rs: BinRect[] = binRects.value;
     for (let i = 0; i < rs.length; i++) {
       const r = rs[i];
-      if (cx >= r.x - 10 && cx <= r.x + r.w + 10 && cy >= r.y - 10 && cy <= r.y + r.h + 10) return i;
+      if (
+        cx >= r.x - 10 &&
+        cx <= r.x + r.w + 10 &&
+        cy >= r.y - 10 &&
+        cy <= r.y + r.h + 10
+      )
+        return i;
     }
     return -1;
   };
 
   const hitSink = (cx: number, cy: number) => {
-    'worklet';
+    "worklet";
     const r = basinRect;
-    return cx >= r.x - 8 && cx <= r.x + r.w + 8 && cy >= r.y - 8 && cy <= r.y + r.h + 8;
+    return (
+      cx >= r.x - 8 &&
+      cx <= r.x + r.w + 8 &&
+      cy >= r.y - 8 &&
+      cy <= r.y + r.h + 8
+    );
   };
 
   const bounce = () => {
-    'worklet';
+    "worklet";
     dx.value = withSpring(0, { damping: 18 });
     dy.value = withSpring(0, { damping: 18 });
     if (!paused) startTravel();
@@ -215,7 +262,9 @@ function BeltItem({
     <GestureDetector gesture={pan}>
       <Animated.View style={[styles.item, { top: ITEM_Y }, style]}>
         <ItemGlyph def={def} />
-        <Text style={styles.itemLabel} numberOfLines={1}>{def.name}</Text>
+        <Text style={styles.itemLabel} numberOfLines={1}>
+          {def.name}
+        </Text>
       </Animated.View>
     </GestureDetector>
   );
@@ -243,9 +292,16 @@ export function BeltScreen({
   const [bestStreak, setBestStreak] = useState(0);
   const [lives, setLives] = useState(ENDLESS_LIVES);
   const [hint, setHint] = useState<string | null>(null);
-  const [bursts, setBursts] = useState<{ id: number; x: number; y: number }[]>([]);
+  const [bursts, setBursts] = useState<{ id: number; x: number; y: number }[]>(
+    [],
+  );
   const [runId, setRunId] = useState(0);
-  const [modal, setModal] = useState<{ x: number; y: number; paused: boolean; item: GameItem } | null>(null);
+  const [modal, setModal] = useState<{
+    x: number;
+    y: number;
+    paused: boolean;
+    item: GameItem;
+  } | null>(null);
   const [danger, setDanger] = useState(false);
   const [sinkItems, setSinkItems] = useState<SinkItem[]>([]);
   const [userPaused, setUserPaused] = useState(false);
@@ -276,7 +332,12 @@ export function BeltScreen({
   const beltPaused = (modal?.paused ?? false) || userPaused;
 
   useEffect(() => {
-    binRects.value = [0, 1, 2].map((i) => ({ x: binX(i), y: binY, w: BIN_W, h: BIN_H }));
+    binRects.value = [0, 1, 2].map((i) => ({
+      x: binX(i),
+      y: binY,
+      w: BIN_W,
+      h: BIN_H,
+    }));
   }, []);
 
   // chevron scroll runs unless the user paused (freezes mid-frame, resumes clean)
@@ -313,7 +374,9 @@ export function BeltScreen({
   // random draw from the spawnable pool (complex items only once their
   // mechanic exists; the bottle's twist-peel does)
   const drawFromPool = (p: GameItem[]): GameItem => {
-    const spawnable = p.filter((it) => !it.complex || it.mechanic === 'twist-peel');
+    const spawnable = p.filter(
+      (it) => !it.complex || it.mechanic === "twist-peel",
+    );
     let i = Math.floor(Math.random() * spawnable.length);
     if (i === lastDrawRef.current) i = (i + 1) % spawnable.length;
     lastDrawRef.current = i;
@@ -325,7 +388,7 @@ export function BeltScreen({
     const s = seasonRef.current;
     if (s && s.items.length > 0 && Math.random() < s.def.replaceRate) {
       const pick = drawSeasonal(s.items, s.def.id);
-      if (pick.rarity === 'rare') sawRareRef.current = true;
+      if (pick.rarity === "rare") sawRareRef.current = true;
       return pick;
     }
     return drawFromPool(poolRef.current);
@@ -333,7 +396,11 @@ export function BeltScreen({
 
   const buildQueue = (p: GameItem[], n: number): GameItem[] => {
     const q: GameItem[] = [];
-    const bottle = p.find((it) => it.id === 'bottle');
+    const bottle = p.find((it) => it.id === "bottle");
+    if (DEBUG_BOTTLE_ONLY && bottle) {
+      for (let i = 0; i < n; i++) q.push(bottle);
+      return q;
+    }
     for (let i = 0; i < n; i++) {
       q.push(bottle && (i === 5 || i === 13) ? bottle : drawOne());
     }
@@ -416,7 +483,8 @@ export function BeltScreen({
   };
 
   const findDef = (defId: string) =>
-    poolRef.current.find((d) => d.id === defId) ?? seasonRef.current?.items.find((d) => d.id === defId);
+    poolRef.current.find((d) => d.id === defId) ??
+    seasonRef.current?.items.find((d) => d.id === defId);
 
   // mistake-as-lesson: first miss per item per shift teaches, repeats just sting
   const wrongSort = (def: GameItem) => {
@@ -431,7 +499,13 @@ export function BeltScreen({
     setStreak(0);
   };
 
-  const handleDrop = (key: number, defId: string, binIdx: number, x: number, y: number) => {
+  const handleDrop = (
+    key: number,
+    defId: string,
+    binIdx: number,
+    x: number,
+    y: number,
+  ) => {
     const def = findDef(defId);
     setItems((prev) => prev.filter((i) => i.key !== key));
     clearDanger(key);
@@ -463,7 +537,7 @@ export function BeltScreen({
     if (endless) setLives((l) => l - 1);
     streakRef.current = 0;
     setStreak(0);
-    setHint('Missed — that contaminates the line');
+    setHint("Missed — that contaminates the line");
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
     flashMiss();
     setResolved((r) => r + 1);
@@ -497,14 +571,17 @@ export function BeltScreen({
   // FIFO pump: done -> rack (cap 4, oldest first), then oldest queued -> rinsing
   const pumpSink = (items: SinkItem[]): SinkItem[] => {
     const next = [...items];
-    let di = next.findIndex((i) => i.status === 'done');
-    while (di >= 0 && next.filter((i) => i.status === 'rack').length < RACK_CAP) {
-      next[di] = { ...next[di], status: 'rack' };
-      di = next.findIndex((i) => i.status === 'done');
+    let di = next.findIndex((i) => i.status === "done");
+    while (
+      di >= 0 &&
+      next.filter((i) => i.status === "rack").length < RACK_CAP
+    ) {
+      next[di] = { ...next[di], status: "rack" };
+      di = next.findIndex((i) => i.status === "done");
     }
-    if (!next.some((i) => i.status === 'rinsing')) {
-      const qi = next.findIndex((i) => i.status === 'queued');
-      if (qi >= 0) next[qi] = { ...next[qi], status: 'rinsing' };
+    if (!next.some((i) => i.status === "rinsing")) {
+      const qi = next.findIndex((i) => i.status === "queued");
+      if (qi >= 0) next[qi] = { ...next[qi], status: "rinsing" };
     }
     return next;
   };
@@ -513,7 +590,12 @@ export function BeltScreen({
     const def = findDef(defId);
     setItems((prev) => prev.filter((i) => i.key !== key));
     clearDanger(key);
-    const item: SinkItem = { key, def, seq: seqRef.current++, status: 'queued' };
+    const item: SinkItem = {
+      key,
+      def,
+      seq: seqRef.current++,
+      status: "queued",
+    };
     setSinkItems((prev) => pumpSink([...prev, item]));
     setHint(null);
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -521,11 +603,21 @@ export function BeltScreen({
 
   const handleRinseDone = (key: number) => {
     setSinkItems((prev) =>
-      pumpSink(prev.map((it) => (it.key === key ? { ...it, status: 'done' as SinkStatus } : it))),
+      pumpSink(
+        prev.map((it) =>
+          it.key === key ? { ...it, status: "done" as SinkStatus } : it,
+        ),
+      ),
     );
   };
 
-  const handleRackDrop = (key: number, defId: string, binIdx: number, x: number, y: number) => {
+  const handleRackDrop = (
+    key: number,
+    defId: string,
+    binIdx: number,
+    x: number,
+    y: number,
+  ) => {
     const def = findDef(defId);
     setSinkItems((prev) => pumpSink(prev.filter((it) => it.key !== key)));
     if (!def) {
@@ -554,9 +646,11 @@ export function BeltScreen({
     onQuit();
   };
 
-  const handleBottleNeedsPrep = () => setHint('Prep the bottle first — drop it in the Prep tray');  const handlePrepHint = () => setHint('Only bottles need prep');
-  const handleRinseHint = () => setHint('Rinse it first — drop it in the sink');
-  const handleBottleSinkHint = () => setHint('Bottles go to the Prep tray');
+  const handleBottleNeedsPrep = () =>
+    setHint("Prep the bottle first — drop it in the Prep tray");
+  const handlePrepHint = () => setHint("Only bottles need prep");
+  const handleRinseHint = () => setHint("Rinse it first — drop it in the sink");
+  const handleBottleSinkHint = () => setHint("Bottles go to the Prep tray");
   const handleCleanHint = () => setHint("That one's already clean");
 
   const chevStyle = useAnimatedStyle(() => ({
@@ -573,7 +667,7 @@ export function BeltScreen({
     items.length === 0 &&
     sinkItems.length > 0;
 
-  const rackItems = sinkItems.filter((i) => i.status === 'rack');
+  const rackItems = sinkItems.filter((i) => i.status === "rack");
 
   // seasonal reskin v1: cooler backdrop while a season is live
   const seasonActive = !!getActiveSeason();
@@ -591,34 +685,52 @@ export function BeltScreen({
       {/* HUD */}
       <View style={styles.hud}>
         <View>
-          <Text style={styles.hudTitle}>{seasonActive ? '❄ ' : ''}{title}</Text>
+          <Text style={styles.hudTitle}>
+            {seasonActive ? "❄ " : ""}
+            {title}
+          </Text>
           <Text style={styles.hudSub}>
             {endless ? `score ${correct}` : `${resolved}/${SHIFT_ITEMS} sorted`}
           </Text>
         </View>
         <View style={styles.streakWrap}>
           <Text style={styles.streak}>
-            {endless ? '❤'.repeat(Math.max(0, lives)) : streak > 1 ? `🔥 ×${streak}` : ' '}
+            {endless
+              ? "❤".repeat(Math.max(0, lives))
+              : streak > 1
+                ? `🔥 ×${streak}`
+                : " "}
           </Text>
-          <Pressable onPress={() => setUserPaused(true)} hitSlop={10} style={styles.pauseBtn}>
+          <Pressable
+            onPress={() => setUserPaused(true)}
+            hitSlop={10}
+            style={styles.pauseBtn}
+          >
             <Text style={styles.pauseGlyph}>⏸</Text>
           </Pressable>
         </View>
       </View>
       {(hint || waitingOnSink) && (
         <Text style={styles.hint}>
-          {hint ?? 'Finish the rinse — drag clean items to their bins'}
+          {hint ?? "Finish the rinse — drag clean items to their bins"}
         </Text>
       )}
 
       {/* belt */}
       <View style={[styles.belt, { top: BELT_TOP, height: BELT_H }]}>
         <Animated.View style={[styles.chevStrip, chevStyle]}>
-          {Array.from({ length: Math.ceil((SW + CHEV_GAP * 2) / CHEV_GAP) }).map((_, i) => (
-            <Text key={i} style={styles.chev}>›</Text>
+          {Array.from({
+            length: Math.ceil((SW + CHEV_GAP * 2) / CHEV_GAP),
+          }).map((_, i) => (
+            <Text key={i} style={styles.chev}>
+              ›
+            </Text>
           ))}
         </Animated.View>
-        <Animated.View style={[styles.missEdge, missStyle]} pointerEvents="none" />
+        <Animated.View
+          style={[styles.missEdge, missStyle]}
+          pointerEvents="none"
+        />
       </View>
 
       {/* items */}
@@ -644,14 +756,26 @@ export function BeltScreen({
       ))}
 
       {/* prep drop zone */}
-      <View style={[styles.prep, { left: PREP.x, top: PREP.y, width: PREP.w, height: PREP.h }]} pointerEvents="none">
+      <View
+        style={[
+          styles.prep,
+          { left: PREP.x, top: PREP.y, width: PREP.w, height: PREP.h },
+        ]}
+        pointerEvents="none"
+      >
         <Text style={styles.prepLabel}>PREP</Text>
         <Text style={styles.prepSub}>bottles go here</Text>
       </View>
 
       {/* rinse sink: big FIFO basin + clean rack on the side (cap 4) */}
-      <SinkBasin items={sinkItems} onRinseDone={handleRinseDone} paused={userPaused} />
-      <Text style={[styles.rackLabel, { left: RACK.x, top: RACK.y + 4 }]}>CLEAN</Text>
+      <SinkBasin
+        items={sinkItems}
+        onRinseDone={handleRinseDone}
+        paused={userPaused}
+      />
+      <Text style={[styles.rackLabel, { left: RACK.x, top: RACK.y + 4 }]}>
+        CLEAN
+      </Text>
       {[0, 1, 2, 3].map((i) => (
         <RackSlot
           key={i}
@@ -665,8 +789,12 @@ export function BeltScreen({
       {/* bins */}
       <View style={styles.bins}>
         {BINS.map((b) => (
-          <View key={b.id} style={[styles.bin, { backgroundColor: b.color }]}>
-            <Text style={styles.binLabel}>{b.label}</Text>
+          <View key={b.id} style={styles.bin}>
+            <Image
+              source={BIN_SPRITES[b.id]}
+              style={{ width: BIN_W, height: BIN_H }}
+              resizeMode="contain"
+            />
           </View>
         ))}
       </View>
@@ -693,11 +821,19 @@ export function BeltScreen({
         <View style={styles.pauseOverlay}>
           <View style={styles.pauseCard}>
             <Text style={styles.pauseTitle}>Paused</Text>
-            <Pressable onPress={() => setUserPaused(false)} style={styles.pauseAction}>
+            <Pressable
+              onPress={() => setUserPaused(false)}
+              style={styles.pauseAction}
+            >
               <Text style={styles.pauseActionText}>Resume</Text>
             </Pressable>
-            <Pressable onPress={doQuit} style={[styles.pauseAction, styles.quitAction]}>
-              <Text style={[styles.pauseActionText, styles.quitText]}>Quit shift</Text>
+            <Pressable
+              onPress={doQuit}
+              style={[styles.pauseAction, styles.quitAction]}
+            >
+              <Text style={[styles.pauseActionText, styles.quitText]}>
+                Quit shift
+              </Text>
             </Pressable>
           </View>
         </View>
@@ -708,160 +844,175 @@ export function BeltScreen({
 
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: C.bg },
-  winterRoot: { backgroundColor: '#EDF1F6' },
-  loadingWrap: { justifyContent: 'center', alignItems: 'center' },
-  loading: { fontSize: 17, fontWeight: '700', color: C.sub },
+  winterRoot: { backgroundColor: "#EDF1F6" },
+  loadingWrap: { justifyContent: "center", alignItems: "center" },
+  loading: { fontSize: 17, fontWeight: "700", color: C.sub },
   hud: {
     paddingTop: 64,
     paddingHorizontal: 24,
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "flex-start",
   },
-  hudTitle: { fontSize: 22, fontWeight: '800', color: C.ink, letterSpacing: 3 },
+  hudTitle: { fontSize: 22, fontWeight: "800", color: C.ink, letterSpacing: 3 },
   hudSub: { fontSize: 13, color: C.sub, marginTop: 2 },
-  streakWrap: { minWidth: 80, alignItems: 'flex-end' },
-  streak: { fontSize: 20, fontWeight: '800', color: C.ink },
+  streakWrap: { minWidth: 80, alignItems: "flex-end" },
+  streak: { fontSize: 20, fontWeight: "800", color: C.ink },
   pauseBtn: {
     marginTop: 6,
     width: 44,
     height: 44,
     borderRadius: 22,
-    backgroundColor: '#FFFDF8',
-    justifyContent: 'center',
-    alignItems: 'center',
-    shadowColor: '#000',
+    backgroundColor: "#FFFDF8",
+    justifyContent: "center",
+    alignItems: "center",
+    shadowColor: "#000",
     shadowOpacity: 0.08,
     shadowRadius: 6,
     shadowOffset: { width: 0, height: 2 },
   },
   pauseGlyph: { fontSize: 18, color: C.sub },
   pauseOverlay: {
-    position: 'absolute',
+    position: "absolute",
     left: 0,
     right: 0,
     top: 0,
     bottom: 0,
-    backgroundColor: 'rgba(46,42,38,0.45)',
-    justifyContent: 'center',
-    alignItems: 'center',
+    backgroundColor: "rgba(46,42,38,0.45)",
+    justifyContent: "center",
+    alignItems: "center",
     zIndex: 50,
   },
   pauseCard: {
-    backgroundColor: '#FFFDF8',
+    backgroundColor: "#FFFDF8",
     borderRadius: 20,
     padding: 28,
     width: 240,
-    alignItems: 'center',
-    shadowColor: '#000',
+    alignItems: "center",
+    shadowColor: "#000",
     shadowOpacity: 0.15,
     shadowRadius: 16,
     shadowOffset: { width: 0, height: 6 },
   },
-  pauseTitle: { fontSize: 24, fontWeight: '900', color: C.ink, marginBottom: 18 },
+  pauseTitle: {
+    fontSize: 24,
+    fontWeight: "900",
+    color: C.ink,
+    marginBottom: 18,
+  },
   pauseAction: {
     backgroundColor: C.belt,
     borderRadius: 14,
     paddingVertical: 12,
-    width: '100%',
-    alignItems: 'center',
+    width: "100%",
+    alignItems: "center",
     marginTop: 10,
   },
-  pauseActionText: { fontSize: 17, fontWeight: '800', color: '#FFFDF8' },
-  quitAction: { backgroundColor: '#F3E9D8' },
+  pauseActionText: { fontSize: 17, fontWeight: "800", color: "#FFFDF8" },
+  quitAction: { backgroundColor: "#F3E9D8" },
   quitText: { color: C.sub },
   hint: {
-    textAlign: 'center',
+    textAlign: "center",
     marginTop: 10,
     fontSize: 14,
-    fontWeight: '600',
-    color: '#B3541E',
+    fontWeight: "600",
+    color: "#B3541E",
     paddingHorizontal: 40,
     minHeight: 20,
   },
   belt: {
-    position: 'absolute',
+    position: "absolute",
     left: 24,
     right: 24,
     backgroundColor: C.belt,
     borderRadius: 18,
-    overflow: 'hidden',
-    justifyContent: 'center',
+    overflow: "hidden",
+    justifyContent: "center",
   },
   chevStrip: {
-    position: 'absolute',
+    position: "absolute",
     left: -CHEV_GAP,
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
   },
   chev: {
     width: CHEV_GAP,
-    textAlign: 'center',
+    textAlign: "center",
     fontSize: 28,
-    fontWeight: '800',
-    color: 'rgba(250,243,232,0.28)',
+    fontWeight: "800",
+    color: "rgba(250,243,232,0.28)",
   },
   missEdge: {
-    position: 'absolute',
+    position: "absolute",
     left: 0,
     top: 0,
     bottom: 0,
     width: 26,
-    backgroundColor: '#D95F4B',
+    backgroundColor: "#D95F4B",
     borderTopLeftRadius: 18,
     borderBottomLeftRadius: 18,
   },
   item: {
-    position: 'absolute',
+    position: "absolute",
     left: 0,
     width: ITEM_S + 16,
-    alignItems: 'center',
+    alignItems: "center",
   },
   itemLabel: {
     marginTop: 4,
     fontSize: 10,
-    fontWeight: '700',
+    fontWeight: "700",
     color: C.ink,
-    backgroundColor: 'rgba(250,243,232,0.85)',
+    backgroundColor: "rgba(250,243,232,0.85)",
     paddingHorizontal: 6,
     paddingVertical: 2,
     borderRadius: 6,
-    overflow: 'hidden',
+    overflow: "hidden",
   },
   prep: {
-    position: 'absolute',
+    position: "absolute",
     borderWidth: 2,
-    borderStyle: 'dashed',
-    borderColor: '#B9A88F',
+    borderStyle: "dashed",
+    borderColor: "#B9A88F",
     borderRadius: 16,
-    backgroundColor: 'rgba(232,161,61,0.08)',
-    justifyContent: 'center',
-    alignItems: 'center',
+    backgroundColor: "rgba(232,161,61,0.08)",
+    justifyContent: "center",
+    alignItems: "center",
   },
-  prepLabel: { fontSize: 15, fontWeight: '800', letterSpacing: 4, color: '#A08C6D' },
-  prepSub: { fontSize: 11, color: '#A08C6D', marginTop: 2 },
+  prepLabel: {
+    fontSize: 15,
+    fontWeight: "800",
+    letterSpacing: 4,
+    color: "#A08C6D",
+  },
+  prepSub: { fontSize: 11, color: "#A08C6D", marginTop: 2 },
   rackLabel: {
-    position: 'absolute',
+    position: "absolute",
     fontSize: 11,
-    fontWeight: '800',
+    fontWeight: "800",
     letterSpacing: 3,
-    color: '#8FAE8B',
+    color: "#8FAE8B",
   },
   bins: {
-    position: 'absolute',
+    position: "absolute",
     left: 0,
     right: 0,
     bottom: BIN_BOTTOM,
-    flexDirection: 'row',
-    justifyContent: 'center',
+    flexDirection: "row",
+    justifyContent: "center",
     gap: BIN_GAP,
   },
   bin: {
     width: BIN_W,
     height: BIN_H,
-    borderRadius: 16,
-    justifyContent: 'center',
-    alignItems: 'center',
+    justifyContent: "center",
+    alignItems: "center",
   },
-  binLabel: { color: '#fff', fontWeight: '800', fontSize: 15 },
+  binLabel: {
+    position: "absolute",
+    bottom: 10,
+    color: "#4A3F35",
+    fontWeight: "800",
+    fontSize: 15,
+  },
 });

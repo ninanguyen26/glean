@@ -1,10 +1,27 @@
 import React from 'react';
-import { View } from 'react-native';
+import { View, Image } from 'react-native';
 import { C } from '../spike/effects';
 import { ItemDef } from './items';
+import { ITEM_SPRITES } from './sprites';
 
-/* Placeholder item glyph (colored shape). Real sprites land in phase 8. */
-export function ItemGlyph({ def, size = 56 }: { def: ItemDef; size?: number }) {
+/*
+ * Phase 8: items with a production sprite render the PNG; everything else
+ * keeps the code-drawn placeholder shape. silhouette=true forces the
+ * shape path (album undiscovered state) so the sprite stays a mystery.
+ */
+export function ItemGlyph({
+  def,
+  size = 56,
+  silhouette = false,
+}: {
+  def: ItemDef;
+  size?: number;
+  silhouette?: boolean;
+}) {
+  const sprite = !silhouette ? ITEM_SPRITES[def.id] : undefined;
+  if (sprite) {
+    return <Image source={sprite} style={{ width: size, height: size }} resizeMode="contain" />;
+  }
   const base = {
     width: size,
     height: size,

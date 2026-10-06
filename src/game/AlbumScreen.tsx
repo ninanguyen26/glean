@@ -57,11 +57,7 @@ export function AlbumScreen({ onBack }: { onBack: () => void }) {
           const isSeen = seen.has(it.id);
           return (
             <View key={it.id} style={styles.cell}>
-              {isSeen ? (
-                <ItemGlyph def={it} size={52} />
-              ) : (
-                <ItemGlyph def={{ ...it, color: '#2E3138' }} size={52} />
-              )}
+              <ItemGlyph def={it} size={52} silhouette={!isSeen} />
               <Text style={styles.name}>{isSeen ? it.name : '???'}</Text>
               {isSeen && it.rarity && (
                 <Text style={[styles.rarity, { color: RARITY_COLOR[it.rarity] }]}>{it.rarity}</Text>
