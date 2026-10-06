@@ -4,10 +4,13 @@ import { C } from '../spike/effects';
 import { MapScreen } from './MapScreen';
 import { RulesScreen } from './RulesScreen';
 import { SummaryScreen } from './SummaryScreen';
+import { AlbumScreen } from './AlbumScreen';
 import { BeltScreen, ShiftResult } from './BeltScreen';
 import {
   DAY_LABELS,
   getRegionDef,
+  getActiveSeason,
+  bumpRarePity,
   loadProgress,
   ProgressSnapshot,
   recordShiftResult,
@@ -21,6 +24,7 @@ type Screen =
   | { name: 'rules'; city: string }
   | { name: 'shift'; city: string; day: number; key: number }
   | { name: 'endless'; key: number }
+  | { name: 'album' }
   | { name: 'summary'; result: ShiftResult; city: string | null; day: number };
 
 export function GameRoot() {
@@ -29,6 +33,12 @@ export function GameRoot() {
 
   const refresh = () => setProgress(loadProgress());
   useEffect(refresh, []);
+
+  // soft pity: a shift with no rare seasonal sighting raises the odds
+  const pityBump = (sawRare: boolean) => {
+    const season = getActiveSeason();
+    if (season && !sawRare) bumpRarePity(season.id);
+  };
 
   if (!progress) {
     return (
@@ -45,8 +55,11 @@ export function GameRoot() {
           progress={progress}
           onSelectCity={(cityId) => setScreen({ name: 'rules', city: cityId })}
           onEndless={() => setScreen({ name: 'endless', key: 0 })}
+          onAlbum={() => setScreen({ name: 'album' })}
         />
       );
+    case 'album':
+      return <AlbumScreen onBack={() => setScreen({ name: 'map' })} />;
     case 'rules': {
       const region = getRegionDef(screen.city);
       const p = progress.cities.find((c) => c.id === screen.city)!;
@@ -69,8 +82,13 @@ export function GameRoot() {
           title={title}
           onShiftEnd={(result) => {
             recordShiftResult(screen.city, screen.day, result.stars, result.correct, result.total);
+            pityBump(result.sawRare);
             refresh();
             setScreen({ name: 'summary', result, city: screen.city, day: screen.day });
+          }}
+          onQuit={() => {
+            refresh();
+            setScreen({ name: 'map' });
           }}
         />
       );
@@ -85,8 +103,13 @@ export function GameRoot() {
           endless
           onShiftEnd={(result) => {
             const newBest = recordEndlessBest(result.score);
+            pityBump(result.sawRare);
             refresh();
             setScreen({ name: 'summary', result: { ...result, newBest }, city: null, day: 0 });
+          }}
+          onQuit={() => {
+            refresh();
+            setScreen({ name: 'map' });
           }}
         />
       );

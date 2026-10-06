@@ -12,7 +12,27 @@ declare const require: any;
 
 const SEED: GameItem[] = require('../../data/seed/items.json').items;
 const REGION_SEED: RegionDef[] = require('../../data/seed/regions.json').regions;
-const DB_VERSION = 1;
+const DB_VERSION = 2;
+
+export interface SeasonItemSeed {
+  id: string;
+  name: string;
+  bin: string;
+  color: string;
+  shape: 'circle' | 'rect' | 'diamond';
+  rarity: 'common' | 'uncommon' | 'rare';
+  teaching?: string;
+}
+
+export interface SeasonDef {
+  id: string;
+  name: string;
+  active: boolean;
+  replaceRate: number;
+  items: SeasonItemSeed[];
+}
+
+const SEASON_SEED: SeasonDef[] = require('../../data/seed/seasons.json').seasons;
 
 export const DAY_LABELS = ['MON', 'TUE', 'WED', 'THU', 'FRI'];
 
@@ -49,7 +69,9 @@ function ensureSeeded(db: any) {
       signature INTEGER NOT NULL DEFAULT 0,
       tricky INTEGER NOT NULL DEFAULT 0,
       teaching TEXT,
-      parts TEXT
+      parts TEXT,
+      season TEXT,
+      rarity TEXT
     );
     CREATE TABLE IF NOT EXISTS shift_results (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -60,14 +82,27 @@ function ensureSeeded(db: any) {
       total INTEGER NOT NULL,
       ts INTEGER NOT NULL
     );
+    CREATE TABLE IF NOT EXISTS seen_items (item_id TEXT PRIMARY KEY, ts INTEGER);
   `);
+  // migrate v1 tables that lack the seasonal columns
+  const cols: any[] = db.getAllSync('PRAGMA table_info(items)');
+  if (!cols.some((c) => c.name === 'season')) {
+    db.execSync('ALTER TABLE items ADD COLUMN season TEXT');
+    db.execSync('ALTER TABLE items ADD COLUMN rarity TEXT');
+  }
   const row: any = db.getFirstSync('SELECT value FROM meta WHERE key = ?', ['items_version']);
+  // 'found' used to mean spawned; now it means sorted correctly — wipe once
+  const seenFlag: any = db.getFirstSync('SELECT value FROM meta WHERE key = ?', ['seen_version']);
+  if (!seenFlag) {
+    db.runSync('DELETE FROM seen_items');
+    db.runSync('INSERT OR REPLACE INTO meta (key, value) VALUES (?, ?)', ['seen_version', '2']);
+  }
   if (row && row.value === String(DB_VERSION)) return;
   db.withTransactionSync(() => {
     db.runSync('DELETE FROM items');
     for (const it of SEED) {
       db.runSync(
-        'INSERT INTO items (id, region, name, bin, color, shape, complex, mechanic, needs_rinse, signature, tricky, teaching, parts) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+        'INSERT INTO items (id, region, name, bin, color, shape, complex, mechanic, needs_rinse, signature, tricky, teaching, parts, season, rarity) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
         [
           it.id,
           it.region,
@@ -82,8 +117,18 @@ function ensureSeeded(db: any) {
           it.tricky ? 1 : 0,
           it.teaching ?? null,
           it.parts ? JSON.stringify(it.parts) : null,
+          it.season ?? null,
+          it.rarity ?? null,
         ],
       );
+    }
+    for (const s of SEASON_SEED) {
+      for (const it of s.items) {
+        db.runSync(
+          'INSERT OR REPLACE INTO items (id, region, name, bin, color, shape, season, rarity, teaching) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
+          [it.id, 'seasonal', it.name, it.bin, it.color, it.shape, s.id, it.rarity, it.teaching ?? null],
+        );
+      }
     }
     db.runSync('INSERT OR REPLACE INTO meta (key, value) VALUES (?, ?)', [
       'items_version',
@@ -107,6 +152,8 @@ function rowToItem(r: any): GameItem {
     tricky: !!r.tricky,
     teaching: r.teaching ?? undefined,
     parts: r.parts ? JSON.parse(r.parts) : undefined,
+    season: r.season ?? undefined,
+    rarity: r.rarity ?? undefined,
   };
 }
 
@@ -257,4 +304,99 @@ export function loadProgress(): ProgressSnapshot {
       nextDay: Math.min(getDaysDone(r.id) + 1, 5),
     })),
   };
+}
+
+/* ---------------- seasonal ---------------- */
+
+export function getActiveSeason(): SeasonDef | null {
+  return SEASON_SEED.find((s) => s.active) ?? null;
+}
+
+export async function loadSeasonalItems(seasonId: string): Promise<GameItem[]> {
+  const db = openDb();
+  if (db) {
+    try {
+      ensureSeeded(db);
+      const rows: any[] = db.getAllSync('SELECT * FROM items WHERE season = ?', [seasonId]);
+      if (rows.length > 0) return rows.map(rowToItem);
+    } catch {
+      // fall through to the bundled seed
+    }
+  }
+  const s = SEASON_SEED.find((x) => x.id === seasonId);
+  return (s?.items ?? []).map((it) => ({ ...it, region: 'seasonal', season: seasonId } as GameItem));
+}
+
+// in-memory fallbacks until the native SQLite module is present
+const memSeen = new Set<string>();
+const memPity: Record<string, number> = {};
+
+export function markItemSeen(itemId: string) {
+  const db = openDb();
+  if (!db) {
+    memSeen.add(itemId);
+    return;
+  }
+  ensureSeeded(db);
+  db.runSync('INSERT OR IGNORE INTO seen_items (item_id, ts) VALUES (?, ?)', [itemId, Date.now()]);
+}
+
+export function getSeenItemIds(): string[] {
+  const db = openDb();
+  if (!db) return [...memSeen];
+  ensureSeeded(db);
+  return (db.getAllSync('SELECT item_id FROM seen_items') as any[]).map((r) => r.item_id);
+}
+
+const pityKey = (seasonId: string) => `pity_${seasonId}`;
+
+function readPity(db: any, seasonId: string): number {
+  const row: any = db.getFirstSync('SELECT value FROM meta WHERE key = ?', [pityKey(seasonId)]);
+  return row ? parseInt(row.value, 10) : 0;
+}
+
+export function getRarePity(seasonId: string): number {
+  const db = openDb();
+  if (!db) return memPity[seasonId] ?? 0;
+  ensureSeeded(db);
+  return readPity(db, seasonId);
+}
+
+export function resetRarePity(seasonId: string) {
+  const db = openDb();
+  if (!db) {
+    memPity[seasonId] = 0;
+    return;
+  }
+  ensureSeeded(db);
+  db.runSync('INSERT OR REPLACE INTO meta (key, value) VALUES (?, ?)', [pityKey(seasonId), '0']);
+}
+
+/** Call at shift end when no rare seasonal appeared. */
+export function bumpRarePity(seasonId: string) {
+  const db = openDb();
+  if (!db) {
+    memPity[seasonId] = (memPity[seasonId] ?? 0) + 1;
+    return;
+  }
+  ensureSeeded(db);
+  const n = readPity(db, seasonId) + 1;
+  db.runSync('INSERT OR REPLACE INTO meta (key, value) VALUES (?, ?)', [pityKey(seasonId), String(n)]);
+}
+
+/** Rarity-weighted seasonal draw (60/30/10 base, soft pity boosts rares). */
+export function drawSeasonal(items: GameItem[], seasonId: string): GameItem {
+  const pity = getRarePity(seasonId);
+  const rareW = Math.min(0.1 + pity * 0.07, 0.31);
+  const rares = items.filter((i) => i.rarity === 'rare');
+  const uncommons = items.filter((i) => i.rarity === 'uncommon');
+  const commons = items.filter((i) => i.rarity === 'common');
+  const r = Math.random();
+  let pool: GameItem[];
+  if (r < rareW && rares.length > 0) pool = rares;
+  else if (r < rareW + (1 - rareW) / 3 && uncommons.length > 0) pool = uncommons;
+  else pool = commons.length > 0 ? commons : items;
+  const pick = pool[Math.floor(Math.random() * pool.length)];
+  if (pick.rarity === 'rare') resetRarePity(seasonId);
+  return pick;
 }

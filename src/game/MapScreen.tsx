@@ -1,7 +1,7 @@
 import React from 'react';
 import { View, Text, StyleSheet, Pressable } from 'react-native';
 import { C } from '../spike/effects';
-import { getAllRegions, ProgressSnapshot } from './db';
+import { getAllRegions, getActiveSeason, ProgressSnapshot } from './db';
 
 /* Phase 6: world map — city cards with stars, locks, workweek dots, endless. */
 
@@ -9,16 +9,28 @@ export function MapScreen({
   progress,
   onSelectCity,
   onEndless,
+  onAlbum,
 }: {
   progress: ProgressSnapshot;
   onSelectCity: (cityId: string) => void;
   onEndless: () => void;
+  onAlbum: () => void;
 }) {
   const regions = getAllRegions();
+  const season = getActiveSeason();
   return (
     <View style={styles.root}>
       <Text style={styles.title}>GLEAN</Text>
       <Text style={styles.sub}>{progress.totalStars} ★ earned</Text>
+
+      {season && (
+        <Pressable onPress={onAlbum} style={styles.seasonBanner}>
+          <Text style={styles.seasonText}>
+            ❄ {season.name} is here — {season.items.length} seasonal finds
+          </Text>
+          <Text style={styles.seasonGo}>album ›</Text>
+        </Pressable>
+      )}
 
       {regions.map((r) => {
         const p = progress.cities.find((c) => c.id === r.id)!;
@@ -68,7 +80,18 @@ export function MapScreen({
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: C.bg, paddingTop: 72, paddingHorizontal: 28 },
   title: { fontSize: 34, fontWeight: '900', letterSpacing: 8, color: C.ink, textAlign: 'center' },
-  sub: { textAlign: 'center', fontSize: 14, color: C.sub, marginTop: 6, marginBottom: 24, fontWeight: '600' },
+  sub: { textAlign: 'center', fontSize: 14, color: C.sub, marginTop: 6, marginBottom: 16, fontWeight: '600' },
+  seasonBanner: {
+    backgroundColor: '#DCE9F5',
+    borderRadius: 14,
+    padding: 14,
+    marginBottom: 16,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  seasonText: { fontSize: 14, fontWeight: '700', color: '#4A6B8A' },
+  seasonGo: { fontSize: 14, fontWeight: '800', color: '#4A6B8A' },
   card: {
     backgroundColor: '#FFFDF8',
     borderRadius: 18,

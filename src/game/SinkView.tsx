@@ -85,9 +85,11 @@ function RinsePie({ progress, size = 76 }: { progress: number; size?: number }) 
 export function SinkBasin({
   items,
   onRinseDone,
+  paused,
 }: {
   items: SinkItem[];
   onRinseDone: (key: number) => void;
+  paused: boolean;
 }) {
   const rinsing = items.find((i) => i.status === 'rinsing');
   const queued = items.filter((i) => i.status === 'queued');
@@ -95,6 +97,8 @@ export function SinkBasin({
   const [progress, setProgress] = useState(0);
   const onRinseDoneRef = useRef(onRinseDone);
   onRinseDoneRef.current = onRinseDone;
+  const pausedRef = useRef(paused);
+  pausedRef.current = paused;
 
   // passive rinse clock (basin-local, never touches the belt screen).
   // The key is captured in the closure so completion always fires for the
@@ -105,6 +109,7 @@ export function SinkBasin({
     let fired = false;
     setProgress(0);
     const t = setInterval(() => {
+      if (pausedRef.current) return;
       setProgress((p) => {
         const n = Math.min(1, p + 0.1 / RINSE_SECS);
         if (n >= 1 && !fired) {

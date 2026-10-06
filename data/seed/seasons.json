@@ -1,0 +1,21 @@
+{
+  "seasons": [
+    {
+      "id": "winter",
+      "name": "Winter",
+      "active": true,
+      "replaceRate": 0.175,
+      "items": [
+        {"id":"pine-needles","name":"Pine needles","bin":"compost","color":"#3E5A3E","shape":"circle","rarity":"common"},
+        {"id":"holiday-card","name":"Holiday card","bin":"recycle","color":"#E8735A","shape":"rect","rarity":"common"},
+        {"id":"chestnut-shells","name":"Chestnut shells","bin":"compost","color":"#7A5230","shape":"circle","rarity":"common"},
+        {"id":"wrap-tube","name":"Wrapping paper tube","bin":"recycle","color":"#C9A06B","shape":"rect","rarity":"common"},
+        {"id":"gift-wrap","name":"Foil gift wrap","bin":"landfill","color":"#D95F4B","shape":"rect","rarity":"uncommon","teaching":"Foil gift wrap can't be recycled."},
+        {"id":"ribbon","name":"Ribbon","bin":"landfill","color":"#E8A13D","shape":"diamond","rarity":"uncommon"},
+        {"id":"eggnog-carton","name":"Eggnog carton","bin":"recycle","color":"#EDEAE2","shape":"rect","rarity":"uncommon"},
+        {"id":"broken-ornament","name":"Broken ornament","bin":"landfill","color":"#D95F4B","shape":"diamond","rarity":"rare"},
+        {"id":"string-lights","name":"Dead string lights","bin":"landfill","color":"#E8C53D","shape":"circle","rarity":"rare","teaching":"Tanglers jam the line."}
+      ]
+    }
+  ]
+}

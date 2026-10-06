@@ -36,6 +36,8 @@ export interface GameItem {
   tricky?: boolean;
   teaching?: string;
   parts?: PartDef[]; // separable parts for complex items
+  season?: string; // seasonal event id, e.g. 'winter'
+  rarity?: 'common' | 'uncommon' | 'rare';
 }
 
 /** Legacy alias used across game code. */

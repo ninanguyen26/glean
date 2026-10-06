@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { View, Text, StyleSheet } from 'react-native';
+import { View, Text, StyleSheet, Pressable } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, {
   useSharedValue,
@@ -22,7 +22,7 @@ import { ItemGlyph } from './ItemGlyph';
 import { BinRect } from './binHit';
 import { DisassemblyModal } from './DisassemblyModal';
 import { SinkBasin, RackSlot, SinkItem, SinkStatus, basinRect, RACK, RACK_CAP } from './SinkView';
-import { loadUnionItems } from './db';
+import { loadUnionItems, getActiveSeason, loadSeasonalItems, drawSeasonal, markItemSeen, SeasonDef } from './db';
 
 /*
  * Phase 6: belt loop as a parameterized shift — region pool, workweek day
@@ -37,6 +37,7 @@ export interface ShiftResult {
   stars: number;
   lessons: string[];
   score: number;
+  sawRare: boolean;
   newBest?: boolean;
 }
 
@@ -225,11 +226,13 @@ export function BeltScreen({
   title,
   endless,
   onShiftEnd,
+  onQuit,
 }: {
   regionId: string | string[];
   title: string;
   endless?: boolean;
   onShiftEnd: (r: ShiftResult) => void;
+  onQuit: () => void;
 }) {
   const [pool, setPool] = useState<GameItem[] | null>(null);
   const [items, setItems] = useState<{ key: number; def: ItemDef }[]>([]);
@@ -245,6 +248,8 @@ export function BeltScreen({
   const [modal, setModal] = useState<{ x: number; y: number; paused: boolean; item: GameItem } | null>(null);
   const [danger, setDanger] = useState(false);
   const [sinkItems, setSinkItems] = useState<SinkItem[]>([]);
+  const [userPaused, setUserPaused] = useState(false);
+  const quitRef = useRef(false);
 
   const keyRef = useRef(0);
   const seqRef = useRef(0);
@@ -258,6 +263,8 @@ export function BeltScreen({
   const peelEncounters = useRef(0);
   const lessonsRef = useRef(new Map<string, string>());
   const endedRef = useRef(false);
+  const seasonRef = useRef<{ def: SeasonDef; items: GameItem[] } | null>(null);
+  const sawRareRef = useRef(false);
   const onShiftEndRef = useRef(onShiftEnd);
   onShiftEndRef.current = onShiftEnd;
 
@@ -265,19 +272,27 @@ export function BeltScreen({
   const missFlash = useSharedValue(0);
   const scroll = useSharedValue(0);
 
-  // derived, never separate state: paused exactly while a pausing modal is open
-  const beltPaused = modal?.paused ?? false;
+  // derived, never separate state: paused for learning modals or by the user
+  const beltPaused = (modal?.paused ?? false) || userPaused;
 
   useEffect(() => {
     binRects.value = [0, 1, 2].map((i) => ({ x: binX(i), y: binY, w: BIN_W, h: BIN_H }));
-    scroll.value = withRepeat(
-      withTiming(-CHEV_GAP, { duration: 450, easing: Easing.linear }),
-      -1,
-      false,
-    );
   }, []);
 
-  // load the region pool (SQLite, JSON fallback)
+  // chevron scroll runs unless the user paused (freezes mid-frame, resumes clean)
+  useEffect(() => {
+    if (userPaused) {
+      scroll.value = scroll.value;
+    } else {
+      scroll.value = withRepeat(
+        withTiming(-CHEV_GAP, { duration: 450, easing: Easing.linear }),
+        -1,
+        false,
+      );
+    }
+  }, [userPaused]);
+
+  // load the region pool (SQLite, JSON fallback) + the seasonal set
   const regionKey = JSON.stringify(regionId);
   useEffect(() => {
     const ids = Array.isArray(regionId) ? regionId : [regionId];
@@ -285,6 +300,14 @@ export function BeltScreen({
       poolRef.current = p;
       setPool(p);
     });
+    const season = getActiveSeason();
+    if (season) {
+      loadSeasonalItems(season.id).then((items) => {
+        seasonRef.current = { def: season, items };
+      });
+    } else {
+      seasonRef.current = null;
+    }
   }, [regionKey]);
 
   // random draw from the spawnable pool (complex items only once their
@@ -297,11 +320,22 @@ export function BeltScreen({
     return spawnable[i];
   };
 
+  // single draw: seasonal roll first (replaces a universal spawn), else pool
+  const drawOne = (): GameItem => {
+    const s = seasonRef.current;
+    if (s && s.items.length > 0 && Math.random() < s.def.replaceRate) {
+      const pick = drawSeasonal(s.items, s.def.id);
+      if (pick.rarity === 'rare') sawRareRef.current = true;
+      return pick;
+    }
+    return drawFromPool(poolRef.current);
+  };
+
   const buildQueue = (p: GameItem[], n: number): GameItem[] => {
     const q: GameItem[] = [];
     const bottle = p.find((it) => it.id === 'bottle');
     for (let i = 0; i < n; i++) {
-      q.push(bottle && (i === 5 || i === 13) ? bottle : drawFromPool(p));
+      q.push(bottle && (i === 5 || i === 13) ? bottle : drawOne());
     }
     return q;
   };
@@ -309,6 +343,7 @@ export function BeltScreen({
   // fresh queue per run, once the pool is loaded
   useEffect(() => {
     if (!pool) return;
+    sawRareRef.current = false;
     queueRef.current = buildQueue(pool, SHIFT_ITEMS);
   }, [runId, pool]);
 
@@ -339,6 +374,7 @@ export function BeltScreen({
     if (!finished || modal) return;
     endedRef.current = true;
     const t = setTimeout(() => {
+      if (quitRef.current) return;
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       const accuracy = resolved > 0 ? correct / resolved : 0;
       const stars = accuracy >= 0.9 ? 3 : accuracy >= 0.7 ? 2 : 1;
@@ -350,6 +386,7 @@ export function BeltScreen({
         stars,
         lessons: Array.from(lessonsRef.current.values()),
         score: correct,
+        sawRare: sawRareRef.current,
       });
     }, 700);
     return () => clearTimeout(t);
@@ -378,7 +415,8 @@ export function BeltScreen({
     setDanger(true);
   };
 
-  const findDef = (defId: string) => poolRef.current.find((d) => d.id === defId)!;
+  const findDef = (defId: string) =>
+    poolRef.current.find((d) => d.id === defId) ?? seasonRef.current?.items.find((d) => d.id === defId);
 
   // mistake-as-lesson: first miss per item per shift teaches, repeats just sting
   const wrongSort = (def: GameItem) => {
@@ -397,10 +435,15 @@ export function BeltScreen({
     const def = findDef(defId);
     setItems((prev) => prev.filter((i) => i.key !== key));
     clearDanger(key);
+    if (!def) {
+      setResolved((r) => r + 1);
+      return;
+    }
     const bin = BINS[binIdx];
     if (bin.id === def.bin) {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
       addBurst(x, y);
+      markItemSeen(def.id);
       setCorrect((c) => c + 1);
       streakRef.current += 1;
       setStreak(streakRef.current);
@@ -485,10 +528,15 @@ export function BeltScreen({
   const handleRackDrop = (key: number, defId: string, binIdx: number, x: number, y: number) => {
     const def = findDef(defId);
     setSinkItems((prev) => pumpSink(prev.filter((it) => it.key !== key)));
+    if (!def) {
+      setResolved((r) => r + 1);
+      return;
+    }
     const bin = BINS[binIdx];
     if (bin.id === def.bin) {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
       addBurst(x, y);
+      markItemSeen(def.id);
       setCorrect((c) => c + 1);
       streakRef.current += 1;
       setStreak(streakRef.current);
@@ -501,8 +549,12 @@ export function BeltScreen({
     setResolved((r) => r + 1);
   };
 
-  const handleBottleNeedsPrep = () => setHint('Prep the bottle first — drop it in the Prep tray');
-  const handlePrepHint = () => setHint('Only bottles need prep');
+  const doQuit = () => {
+    quitRef.current = true;
+    onQuit();
+  };
+
+  const handleBottleNeedsPrep = () => setHint('Prep the bottle first — drop it in the Prep tray');  const handlePrepHint = () => setHint('Only bottles need prep');
   const handleRinseHint = () => setHint('Rinse it first — drop it in the sink');
   const handleBottleSinkHint = () => setHint('Bottles go to the Prep tray');
   const handleCleanHint = () => setHint("That one's already clean");
@@ -523,6 +575,9 @@ export function BeltScreen({
 
   const rackItems = sinkItems.filter((i) => i.status === 'rack');
 
+  // seasonal reskin v1: cooler backdrop while a season is live
+  const seasonActive = !!getActiveSeason();
+
   if (!pool) {
     return (
       <View style={[styles.root, styles.loadingWrap]}>
@@ -532,11 +587,11 @@ export function BeltScreen({
   }
 
   return (
-    <View style={styles.root}>
+    <View style={[styles.root, seasonActive && styles.winterRoot]}>
       {/* HUD */}
       <View style={styles.hud}>
         <View>
-          <Text style={styles.hudTitle}>{title}</Text>
+          <Text style={styles.hudTitle}>{seasonActive ? '❄ ' : ''}{title}</Text>
           <Text style={styles.hudSub}>
             {endless ? `score ${correct}` : `${resolved}/${SHIFT_ITEMS} sorted`}
           </Text>
@@ -545,6 +600,9 @@ export function BeltScreen({
           <Text style={styles.streak}>
             {endless ? '❤'.repeat(Math.max(0, lives)) : streak > 1 ? `🔥 ×${streak}` : ' '}
           </Text>
+          <Pressable onPress={() => setUserPaused(true)} hitSlop={10} style={styles.pauseBtn}>
+            <Text style={styles.pauseGlyph}>⏸</Text>
+          </Pressable>
         </View>
       </View>
       {(hint || waitingOnSink) && (
@@ -592,7 +650,7 @@ export function BeltScreen({
       </View>
 
       {/* rinse sink: big FIFO basin + clean rack on the side (cap 4) */}
-      <SinkBasin items={sinkItems} onRinseDone={handleRinseDone} />
+      <SinkBasin items={sinkItems} onRinseDone={handleRinseDone} paused={userPaused} />
       <Text style={[styles.rackLabel, { left: RACK.x, top: RACK.y + 4 }]}>CLEAN</Text>
       {[0, 1, 2, 3].map((i) => (
         <RackSlot
@@ -629,12 +687,28 @@ export function BeltScreen({
           onClose={handleModalClose}
         />
       )}
+
+      {/* user pause overlay */}
+      {userPaused && (
+        <View style={styles.pauseOverlay}>
+          <View style={styles.pauseCard}>
+            <Text style={styles.pauseTitle}>Paused</Text>
+            <Pressable onPress={() => setUserPaused(false)} style={styles.pauseAction}>
+              <Text style={styles.pauseActionText}>Resume</Text>
+            </Pressable>
+            <Pressable onPress={doQuit} style={[styles.pauseAction, styles.quitAction]}>
+              <Text style={[styles.pauseActionText, styles.quitText]}>Quit shift</Text>
+            </Pressable>
+          </View>
+        </View>
+      )}
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: C.bg },
+  winterRoot: { backgroundColor: '#EDF1F6' },
   loadingWrap: { justifyContent: 'center', alignItems: 'center' },
   loading: { fontSize: 17, fontWeight: '700', color: C.sub },
   hud: {
@@ -648,6 +722,54 @@ const styles = StyleSheet.create({
   hudSub: { fontSize: 13, color: C.sub, marginTop: 2 },
   streakWrap: { minWidth: 80, alignItems: 'flex-end' },
   streak: { fontSize: 20, fontWeight: '800', color: C.ink },
+  pauseBtn: {
+    marginTop: 6,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: '#FFFDF8',
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOpacity: 0.08,
+    shadowRadius: 6,
+    shadowOffset: { width: 0, height: 2 },
+  },
+  pauseGlyph: { fontSize: 18, color: C.sub },
+  pauseOverlay: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    top: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(46,42,38,0.45)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 50,
+  },
+  pauseCard: {
+    backgroundColor: '#FFFDF8',
+    borderRadius: 20,
+    padding: 28,
+    width: 240,
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOpacity: 0.15,
+    shadowRadius: 16,
+    shadowOffset: { width: 0, height: 6 },
+  },
+  pauseTitle: { fontSize: 24, fontWeight: '900', color: C.ink, marginBottom: 18 },
+  pauseAction: {
+    backgroundColor: C.belt,
+    borderRadius: 14,
+    paddingVertical: 12,
+    width: '100%',
+    alignItems: 'center',
+    marginTop: 10,
+  },
+  pauseActionText: { fontSize: 17, fontWeight: '800', color: '#FFFDF8' },
+  quitAction: { backgroundColor: '#F3E9D8' },
+  quitText: { color: C.sub },
   hint: {
     textAlign: 'center',
     marginTop: 10,
