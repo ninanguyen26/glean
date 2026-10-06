@@ -1,0 +1,11 @@
+{
+  "regions": [
+    {
+      "id": "portland",
+      "name": "Portland",
+      "streams": ["compost", "recycle", "landfill"],
+      "workweekDays": 5,
+      "blurb": "Keep Portland weird. And sorted."
+    }
+  ]
+}

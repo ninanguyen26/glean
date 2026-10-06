@@ -18,7 +18,7 @@ import {
   Pulse, Burst,
 } from '../spike/effects';
 import { ModalBottle } from '../spike/BottleArt';
-import { BINS, ItemDef } from './items';
+import { BINS, BinId, ItemDef, PartDef } from './items';
 import { hitBinPoint } from './binHit';
 
 /*
@@ -38,14 +38,6 @@ const PEEL_DIST = 150;
 
 type PartId = 'cap' | 'wrapper' | 'body';
 
-// BINS order: 0 compost, 1 recycle, 2 landfill
-const PART_BIN: Record<PartId, number> = { cap: 1, wrapper: 2, body: 1 };
-const PART_HINT: Record<PartId, string> = {
-  cap: 'Caps go in recycling.',
-  wrapper: 'Film plastic goes in landfill.',
-  body: 'Bottles go in recycling.',
-};
-
 const CAP = { x: BX + 43, y: BY - 53, w: 64, h: 40 };
 const WRAP = { x: BX + 10, y: BY + 94, w: 130, h: 84 };
 const BODY = { x: BX, y: BY, w: BW, h: BH };
@@ -55,14 +47,27 @@ export function DisassemblyModal({
   paused,
   ticker,
   danger,
+  parts,
   onClose,
 }: {
   origin: { x: number; y: number };
   paused: boolean;
   ticker: ItemDef[];
   danger: boolean;
+  parts: PartDef[];
   onClose: (allCorrect: boolean) => void;
 }) {
+  // part -> bin mapping comes from the item record (data-driven since phase 5)
+  const binIndex = (b: BinId) => BINS.findIndex((x) => x.id === b);
+  const PART_BIN: Record<PartId, number> = Object.fromEntries(
+    parts.map((p) => [p.id, binIndex(p.bin)]),
+  ) as Record<PartId, number>;
+  const PART_HINT: Record<PartId, string> = Object.fromEntries(
+    parts.map((p) => [p.id, p.hint]),
+  ) as Record<PartId, string>;
+  const PART_LABEL: Record<PartId, string> = Object.fromEntries(
+    parts.map((p) => [p.id, p.label]),
+  ) as Record<PartId, string>;
   const [step, setStep] = useState<'prep' | 'sort' | 'done'>('prep');
   const [capGone, setCapGone] = useState(false);
   const [wrapGone, setWrapGone] = useState(false);
@@ -378,14 +383,14 @@ export function DisassemblyModal({
         {capChip && !sortedIds.includes('cap') && (
           <GestureDetector gesture={chipPan('cap', capTx, capTy, CAP.x, CAP.y, CAP.w, CAP.h, null)}>
             <Animated.View style={[styles.chip, { left: CAP.x, top: CAP.y, width: CAP.w, height: CAP.h, backgroundColor: C.cap }, capStyle]}>
-              <Text style={styles.chipLabel}>cap</Text>
+              <Text style={styles.chipLabel}>{PART_LABEL.cap ?? 'cap'}</Text>
             </Animated.View>
           </GestureDetector>
         )}
         {wrapChip && !sortedIds.includes('wrapper') && (
           <GestureDetector gesture={chipPan('wrapper', wrapTx, wrapTy, WRAP.x, WRAP.y, WRAP.w, WRAP.h, null)}>
             <Animated.View style={[styles.chip, { left: WRAP.x, top: WRAP.y, width: WRAP.w, height: WRAP.h, backgroundColor: C.wrapper }, wrapStyle]}>
-              <Text style={styles.chipLabel}>label</Text>
+              <Text style={styles.chipLabel}>{PART_LABEL.wrapper ?? 'label'}</Text>
             </Animated.View>
           </GestureDetector>
         )}

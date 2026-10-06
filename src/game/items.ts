@@ -1,4 +1,5 @@
-/* Phase 2 placeholder content. Real region/item data pipeline lands in phase 5. */
+/* Phase 5: types + stream defs. Item content lives in data/seed/items.json
+   and is loaded via src/game/db.ts (SQLite, JSON fallback). */
 
 export type BinId = 'compost' | 'recycle' | 'landfill';
 
@@ -14,44 +15,28 @@ export const BINS: BinDef[] = [
   { id: 'landfill', label: 'Landfill', color: '#9A958C' },
 ];
 
-export interface ItemDef {
+export interface PartDef {
   id: string;
+  label: string;
+  bin: BinId;
+  hint: string;
+}
+
+export interface GameItem {
+  id: string;
+  region: string;
   name: string;
   bin: BinId;
   color: string;
   shape: 'circle' | 'rect' | 'diamond';
   complex?: boolean; // needs disassembly in the prep modal
+  mechanic?: string; // which disassembly choreography, e.g. 'twist-peel'
   needsRinse?: boolean; // must visit the sink before its bin
+  signature?: boolean;
+  tricky?: boolean;
+  teaching?: string;
+  parts?: PartDef[]; // separable parts for complex items
 }
 
-export const ITEM_DEFS: ItemDef[] = [
-  { id: 'banana', name: 'Banana peel', bin: 'compost', color: '#E8C53D', shape: 'circle' },
-  { id: 'apple', name: 'Apple core', bin: 'compost', color: '#D95F4B', shape: 'circle' },
-  { id: 'coffee', name: 'Coffee grounds', bin: 'compost', color: '#7A5230', shape: 'rect' },
-  { id: 'pizza', name: 'Pizza box', bin: 'compost', color: '#D9A05F', shape: 'rect' },
-  { id: 'news', name: 'Newspaper', bin: 'recycle', color: '#9AA3A8', shape: 'rect' },
-  { id: 'can', name: 'Alu can', bin: 'recycle', color: '#C0CBD2', shape: 'circle', needsRinse: true },
-  { id: 'jar', name: 'Glass jar', bin: 'recycle', color: '#7FB3D5', shape: 'rect', needsRinse: true },
-  { id: 'chips', name: 'Chip bag', bin: 'landfill', color: '#E8913D', shape: 'rect' },
-  { id: 'styro', name: 'Foam cup', bin: 'landfill', color: '#EDEAE2', shape: 'circle' },
-  { id: 'butt', name: 'Cig butt', bin: 'landfill', color: '#8A7B68', shape: 'diamond' },
-];
-
-let lastIdx = -1;
-/** Draw a random item, avoiding an immediate repeat. */
-export function drawItem(): ItemDef {
-  let i = Math.floor(Math.random() * ITEM_DEFS.length);
-  if (i === lastIdx) i = (i + 1) % ITEM_DEFS.length;
-  lastIdx = i;
-  return ITEM_DEFS[i];
-}
-
-/** The phase-3 complex item: a plastic bottle that must be prepped. */
-export const BOTTLE_DEF: ItemDef = {
-  id: 'bottle',
-  name: 'Plastic bottle',
-  bin: 'recycle',
-  color: '#7FB3D5',
-  shape: 'rect',
-  complex: true,
-};
+/** Legacy alias used across game code. */
+export type ItemDef = GameItem;

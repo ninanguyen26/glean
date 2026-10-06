@@ -17,17 +17,18 @@ import {
   C, SW, BIN_W, BIN_H, BIN_GAP, BIN_BOTTOM, binX, binY,
   Burst,
 } from '../spike/effects';
-import { BINS, ITEM_DEFS, BOTTLE_DEF, drawItem, ItemDef } from './items';
+import { BINS, GameItem, ItemDef } from './items';
 import { ItemGlyph } from './ItemGlyph';
 import { BinRect } from './binHit';
 import { DisassemblyModal } from './DisassemblyModal';
 import { SinkSlot, SinkItem, sinkRects, SINK_TOP } from './SinkView';
+import { loadRegionItems } from './db';
 
 /*
- * Phase 4: belt loop + disassembly modal + passive rinse sink.
- * - Dirty items (needsRinse) must soak in the sink before their bin.
- * - Sink: 3 slots, passive ~15s, 4 pie quarters -> green + haptic when done.
- * - Drag the clean item out of its slot to sort it.
+ * Phase 5: belt loop + disassembly modal + rinse sink, all data-driven.
+ * The item pool loads from SQLite (seeded from data/seed/items.json),
+ * falling back to the bundled JSON until the dev client is rebuilt with
+ * the expo-sqlite native module.
  */
 
 const BELT_TOP = 250;
@@ -72,7 +73,7 @@ function BeltItem({
   sinkTaken: { value: boolean[] };
   onDrop: (key: number, defId: string, binIdx: number, x: number, y: number) => void;
   onMissed: (key: number, defId: string) => void;
-  onPrep: (key: number, defId: string, x: number, y: number) => void;
+  onPrep: (key: number, def: GameItem, x: number, y: number) => void;
   onDanger: (key: number) => void;
   onSink: (key: number, defId: string, slotIdx: number, x: number, y: number) => void;
   onBottleNeedsPrep: () => void;
@@ -173,7 +174,7 @@ function BeltItem({
       if (def.complex) {
         if (prepHit) {
           settled.value = true;
-          runOnJS(onPrep)(itemKey, def.id, cx, cy);
+          runOnJS(onPrep)(itemKey, def, cx, cy);
         } else {
           bounce();
           if (binHit >= 0) runOnJS(onBottleNeedsPrep)();
@@ -218,6 +219,7 @@ function BeltItem({
 }
 
 export function BeltScreen() {
+  const [pool, setPool] = useState<GameItem[] | null>(null);
   const [items, setItems] = useState<{ key: number; def: ItemDef }[]>([]);
   const [resolved, setResolved] = useState(0);
   const [correct, setCorrect] = useState(0);
@@ -228,10 +230,7 @@ export function BeltScreen() {
   const [bursts, setBursts] = useState<{ id: number; x: number; y: number }[]>([]);
   const [done, setDone] = useState(false);
   const [runId, setRunId] = useState(0);
-  const [modal, setModal] = useState<{ x: number; y: number; paused: boolean } | null>(null);
-  // derived, never separate state: the belt is paused exactly while a pausing modal is open,
-  // so the flag can't stick if the modal ever goes away by another path
-  const beltPaused = modal?.paused ?? false;
+  const [modal, setModal] = useState<{ x: number; y: number; paused: boolean; item: GameItem } | null>(null);
   const [danger, setDanger] = useState(false);
   const [sinkSlots, setSinkSlots] = useState<(SinkItem | null)[]>([null, null, null]);
 
@@ -239,6 +238,8 @@ export function BeltScreen() {
   const streakRef = useRef(0);
   const burstId = useRef(0);
   const queueRef = useRef<ItemDef[]>([]);
+  const poolRef = useRef<GameItem[]>([]);
+  const lastDrawRef = useRef(-1);
   const dangerKeysRef = useRef<Set<number>>(new Set());
   const twistEncounters = useRef(0);
   const peelEncounters = useRef(0);
@@ -247,6 +248,9 @@ export function BeltScreen() {
   const sinkTaken = useSharedValue<boolean[]>([false, false, false]);
   const missFlash = useSharedValue(0);
   const scroll = useSharedValue(0);
+
+  // derived, never separate state: paused exactly while a pausing modal is open
+  const beltPaused = modal?.paused ?? false;
 
   useEffect(() => {
     binRects.value = [0, 1, 2].map((i) => ({ x: binX(i), y: binY, w: BIN_W, h: BIN_H }));
@@ -257,22 +261,42 @@ export function BeltScreen() {
     );
   }, []);
 
-  const buildQueue = (): ItemDef[] => {
-    const q: ItemDef[] = [];
+  // load the Portland pool (SQLite, JSON fallback)
+  useEffect(() => {
+    loadRegionItems('portland').then((p) => {
+      poolRef.current = p;
+      setPool(p);
+    });
+  }, []);
+
+  // random draw from the spawnable pool (complex items only once their
+  // mechanic exists; the bottle's twist-peel does)
+  const drawFromPool = (p: GameItem[]): GameItem => {
+    const spawnable = p.filter((it) => !it.complex || it.mechanic === 'twist-peel');
+    let i = Math.floor(Math.random() * spawnable.length);
+    if (i === lastDrawRef.current) i = (i + 1) % spawnable.length;
+    lastDrawRef.current = i;
+    return spawnable[i];
+  };
+
+  const buildQueue = (p: GameItem[]): GameItem[] => {
+    const q: GameItem[] = [];
+    const bottle = p.find((it) => it.id === 'bottle')!;
     for (let i = 0; i < SHIFT_ITEMS; i++) {
-      q.push(i === 5 || i === 13 ? BOTTLE_DEF : drawItem());
+      q.push(i === 5 || i === 13 ? bottle : drawFromPool(p));
     }
     return q;
   };
 
-  // fresh queue per run
+  // fresh queue per run, once the pool is loaded
   useEffect(() => {
-    queueRef.current = buildQueue();
-  }, [runId]);
+    if (!pool) return;
+    queueRef.current = buildQueue(pool);
+  }, [runId, pool]);
 
   // spawner (dead while the belt is paused for learning)
   useEffect(() => {
-    if (beltPaused) return;
+    if (beltPaused || !pool) return;
     const t = setInterval(() => {
       const q = queueRef.current;
       if (q.length === 0) {
@@ -284,7 +308,7 @@ export function BeltScreen() {
       setItems((prev) => [...prev, { key, def }]);
     }, SPAWN_MS);
     return () => clearInterval(t);
-  }, [runId, beltPaused]);
+  }, [runId, beltPaused, pool]);
 
   // sink occupancy mirror for the belt items' worklets
   useEffect(() => {
@@ -325,8 +349,10 @@ export function BeltScreen() {
     setDanger(true);
   };
 
+  const findDef = (defId: string) => poolRef.current.find((d) => d.id === defId)!;
+
   const handleDrop = (key: number, defId: string, binIdx: number, x: number, y: number) => {
-    const def = ITEM_DEFS.find((d) => d.id === defId)!;
+    const def = findDef(defId);
     setItems((prev) => prev.filter((i) => i.key !== key));
     clearDanger(key);
     const bin = BINS[binIdx];
@@ -360,13 +386,13 @@ export function BeltScreen() {
     setResolved((r) => r + 1);
   };
 
-  const handlePrep = (key: number, defId: string, x: number, y: number) => {
+  const handlePrep = (key: number, def: GameItem, x: number, y: number) => {
     setItems((prev) => prev.filter((i) => i.key !== key));
     clearDanger(key);
     const paused = twistEncounters.current < 2 || peelEncounters.current < 2;
     twistEncounters.current += 1;
     peelEncounters.current += 1;
-    setModal({ x, y, paused });
+    setModal({ x, y, paused, item: def });
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
   };
 
@@ -386,7 +412,7 @@ export function BeltScreen() {
   };
 
   const handleSink = (key: number, defId: string, slotIdx: number, x: number, y: number) => {
-    const def = ITEM_DEFS.find((d) => d.id === defId)!;
+    const def = findDef(defId);
     setItems((prev) => prev.filter((i) => i.key !== key));
     clearDanger(key);
     setSinkSlots((prev) => prev.map((s, i) => (i === slotIdx ? { key, def } : s)));
@@ -397,7 +423,7 @@ export function BeltScreen() {
   };
 
   const handleSinkDrop = (slotKey: number, defId: string, binIdx: number, x: number, y: number) => {
-    const def = ITEM_DEFS.find((d) => d.id === defId)!;
+    const def = findDef(defId);
     setSinkSlots((prev) => prev.map((s) => (s && s.key === slotKey ? null : s)));
     const freed = sinkSlots.findIndex((s) => s && s.key === slotKey);
     if (freed >= 0) sinkTaken.value = sinkTaken.value.map((t, i) => (i === freed ? false : t));
@@ -431,6 +457,7 @@ export function BeltScreen() {
     keyRef.current = 0;
     streakRef.current = 0;
     dangerKeysRef.current.clear();
+    lastDrawRef.current = -1;
     setDanger(false);
     setItems([]);
     setSinkSlots([null, null, null]);
@@ -455,7 +482,15 @@ export function BeltScreen() {
   const accuracy = resolved > 0 ? correct / resolved : 0;
   const stars = accuracy >= 0.9 ? 3 : accuracy >= 0.7 ? 2 : 1;
   const waitingOnSink =
-    !done && queueRef.current.length === 0 && items.length === 0 && sinkSlots.some(Boolean);
+    !done && pool !== null && queueRef.current.length === 0 && items.length === 0 && sinkSlots.some(Boolean);
+
+  if (!pool) {
+    return (
+      <View style={[styles.root, styles.loadingWrap]}>
+        <Text style={styles.loading}>Loading Portland…</Text>
+      </View>
+    );
+  }
 
   return (
     <View style={styles.root}>
@@ -542,6 +577,7 @@ export function BeltScreen() {
           paused={modal.paused}
           ticker={queueRef.current.slice(0, 3)}
           danger={danger}
+          parts={modal.item.parts ?? []}
           onClose={handleModalClose}
         />
       )}
@@ -567,6 +603,8 @@ export function BeltScreen() {
 
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: C.bg },
+  loadingWrap: { justifyContent: 'center', alignItems: 'center' },
+  loading: { fontSize: 17, fontWeight: '700', color: C.sub },
   hud: {
     paddingTop: 64,
     paddingHorizontal: 24,
