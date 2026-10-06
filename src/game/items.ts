@@ -20,6 +20,7 @@ export interface ItemDef {
   bin: BinId;
   color: string;
   shape: 'circle' | 'rect' | 'diamond';
+  complex?: boolean; // needs disassembly in the prep modal
 }
 
 export const ITEM_DEFS: ItemDef[] = [
@@ -43,3 +44,13 @@ export function drawItem(): ItemDef {
   lastIdx = i;
   return ITEM_DEFS[i];
 }
+
+/** The phase-3 complex item: a plastic bottle that must be prepped. */
+export const BOTTLE_DEF: ItemDef = {
+  id: 'bottle',
+  name: 'Plastic bottle',
+  bin: 'recycle',
+  color: '#7FB3D5',
+  shape: 'rect',
+  complex: true,
+};

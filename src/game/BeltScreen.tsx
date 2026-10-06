@@ -4,6 +4,7 @@ import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
+  useAnimatedReaction,
   withTiming,
   withSpring,
   withSequence,
@@ -13,16 +14,19 @@ import Animated, {
 } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
 import {
-  C, SW, SH, BIN_W, BIN_H, BIN_GAP, BIN_BOTTOM, binX, binY,
+  C, SW, BIN_W, BIN_H, BIN_GAP, BIN_BOTTOM, binX, binY,
   Burst,
 } from '../spike/effects';
-import { BINS, ITEM_DEFS, drawItem, ItemDef, BinId } from './items';
+import { BINS, ITEM_DEFS, BOTTLE_DEF, drawItem, ItemDef } from './items';
+import { DisassemblyModal } from './DisassemblyModal';
 
 /*
- * Phase 2: core belt loop (placeholder art).
- * Belt scrolls right -> left, items spawn, drag them into bins.
- * Correct = streak + burst. Wrong = shake + teaching hint. Fall off the
- * left edge = contamination miss. 20-item shift, then a summary.
+ * Phase 3: belt loop + production disassembly modal.
+ * - 20-item shift from a prebuilt queue (bottles at #6 and #14).
+ * - Drag a bottle into the PREP tray -> modal zooms from the drop point.
+ * - First 2 bottle encounters pause the belt (Ngoc's pause-when-learning);
+ *   after that the belt keeps running and the modal shows a live ticker.
+ * - Ticker: next 3 queued items + red edge glow when one nears fall-off.
  */
 
 const BELT_TOP = 250;
@@ -31,24 +35,34 @@ const ITEM_S = 64;
 const ITEM_Y = BELT_TOP + (BELT_H - ITEM_S) / 2 - 8;
 const SPAWN_X = SW + 40;
 const MISS_X = -ITEM_S - 24;
+const DANGER_X = 70;
 const SPEED = 110; // pt/s
 const SPAWN_MS = 2600;
 const SHIFT_ITEMS = 20;
 const CHEV_GAP = 44;
 
+// prep drop zone (main screen, between belt and bins)
+const PREP = { x: SW / 2 - 110, y: 432, w: 220, h: 92 };
+
 interface BinRect { x: number; y: number; w: number; h: number }
 
-function ItemGlyph({ def }: { def: ItemDef }) {
+export function ItemGlyph({ def, size = 56 }: { def: ItemDef; size?: number }) {
   const base = {
-    width: 56,
-    height: 56,
+    width: size,
+    height: size,
     backgroundColor: def.color,
     borderWidth: 3,
     borderColor: 'rgba(74,63,53,0.35)',
   };
-  if (def.shape === 'circle') return <View style={[base, { borderRadius: 28 }]} />;
+  if (def.shape === 'circle') return <View style={[base, { borderRadius: size / 2 }]} />;
   if (def.shape === 'diamond')
-    return <View style={[base, { borderRadius: 12, transform: [{ rotate: '45deg' }, { scale: 0.8 }] }]} />;
+    return <View style={[base, { borderRadius: 10, transform: [{ rotate: '45deg' }, { scale: 0.8 }] }]} />;
+  if (def.complex)
+    return (
+      <View style={[base, { borderRadius: 12, alignItems: 'center', justifyContent: 'flex-end', paddingBottom: 6 }]}>
+        <View style={{ width: size * 0.34, height: size * 0.2, borderRadius: 5, backgroundColor: C.cap }} />
+      </View>
+    );
   return <View style={[base, { borderRadius: 12 }]} />;
 }
 
@@ -56,29 +70,74 @@ function BeltItem({
   itemKey,
   def,
   binRects,
+  prepRect,
+  paused,
   onDrop,
   onMissed,
+  onPrep,
+  onDanger,
+  onBottleNeedsPrep,
+  onPrepHint,
 }: {
   itemKey: number;
   def: ItemDef;
   binRects: any;
+  prepRect: BinRect;
+  paused: boolean;
   onDrop: (key: number, defId: string, binIdx: number, x: number, y: number) => void;
   onMissed: (key: number, defId: string) => void;
+  onPrep: (key: number, defId: string, x: number, y: number) => void;
+  onDanger: (key: number) => void;
+  onBottleNeedsPrep: () => void;
+  onPrepHint: () => void;
 }) {
   const bx = useSharedValue(SPAWN_X);
   const dx = useSharedValue(0);
   const dy = useSharedValue(0);
   const settled = useSharedValue(false);
+  const dangerSent = useSharedValue(false);
 
-  useEffect(() => {
-    const dist = SPAWN_X - MISS_X;
+  const startTravel = () => {
+    'worklet';
+    const dist = bx.value - MISS_X;
+    if (dist <= 0) return;
     bx.value = withTiming(MISS_X, { duration: (dist / SPEED) * 1000, easing: Easing.linear }, (finished) => {
       if (finished && !settled.value) {
         settled.value = true;
         runOnJS(onMissed)(itemKey, def.id);
       }
     });
+  };
+
+  useEffect(() => {
+    startTravel();
   }, []);
+
+  // pause-when-learning: freeze on pause, resume on unpause
+  useEffect(() => {
+    if (paused) {
+      bx.value = bx.value;
+    } else if (!settled.value) {
+      startTravel();
+    }
+  }, [paused]);
+
+  // report when nearing fall-off (drives the modal ticker's red edge)
+  useAnimatedReaction(
+    () => bx.value,
+    (x) => {
+      if (x < DANGER_X && !dangerSent.value) {
+        dangerSent.value = true;
+        runOnJS(onDanger)(itemKey);
+      }
+    },
+  );
+
+  const inPrep = (cx: number, cy: number) => {
+    'worklet';
+    const r = prepRect;
+    return cx >= r.x && cx <= r.x + r.w && cy >= r.y && cy <= r.y + r.h;
+  };
 
   const hitBin = (cx: number, cy: number) => {
     'worklet';
@@ -92,8 +151,7 @@ function BeltItem({
 
   const pan = Gesture.Pan()
     .onBegin(() => {
-      // detach from the belt: freeze travel so the item stays under the finger
-      bx.value = bx.value;
+      bx.value = bx.value; // detach from the belt while held
     })
     .onUpdate((e) => {
       dx.value = e.translationX;
@@ -102,21 +160,20 @@ function BeltItem({
     .onEnd((e) => {
       const cx = bx.value + e.translationX + ITEM_S / 2;
       const cy = ITEM_Y + e.translationY + ITEM_S / 2;
-      const hit = hitBin(cx, cy);
-      if (hit >= 0) {
+      const prepHit = inPrep(cx, cy);
+      const binHit = hitBin(cx, cy);
+      if (def.complex && prepHit) {
         settled.value = true;
-        runOnJS(onDrop)(itemKey, def.id, hit, cx, cy);
+        runOnJS(onPrep)(itemKey, def.id, cx, cy);
+      } else if (!def.complex && binHit >= 0) {
+        settled.value = true;
+        runOnJS(onDrop)(itemKey, def.id, binHit, cx, cy);
       } else {
         dx.value = withSpring(0, { damping: 18 });
         dy.value = withSpring(0, { damping: 18 });
-        // resume belt travel from the frozen position
-        const dist = bx.value - MISS_X;
-        bx.value = withTiming(MISS_X, { duration: (dist / SPEED) * 1000, easing: Easing.linear }, (finished) => {
-          if (finished && !settled.value) {
-            settled.value = true;
-            runOnJS(onMissed)(itemKey, def.id);
-          }
-        });
+        if (!paused) startTravel();
+        if (def.complex && binHit >= 0) runOnJS(onBottleNeedsPrep)();
+        else if (!def.complex && prepHit) runOnJS(onPrepHint)();
       }
     });
 
@@ -145,11 +202,17 @@ export function BeltScreen() {
   const [bursts, setBursts] = useState<{ id: number; x: number; y: number }[]>([]);
   const [done, setDone] = useState(false);
   const [runId, setRunId] = useState(0);
+  const [modal, setModal] = useState<{ x: number; y: number; paused: boolean } | null>(null);
+  const [beltPaused, setBeltPaused] = useState(false);
+  const [danger, setDanger] = useState(false);
 
   const keyRef = useRef(0);
-  const spawnedRef = useRef(0);
   const streakRef = useRef(0);
   const burstId = useRef(0);
+  const queueRef = useRef<ItemDef[]>([]);
+  const dangerKeysRef = useRef<Set<number>>(new Set());
+  const twistEncounters = useRef(0);
+  const peelEncounters = useRef(0);
 
   const binRects = useSharedValue<BinRect[]>([]);
   const missFlash = useSharedValue(0);
@@ -164,32 +227,45 @@ export function BeltScreen() {
     );
   }, []);
 
-  // item spawner (re-armed on every replay via runId)
+  const buildQueue = (): ItemDef[] => {
+    const q: ItemDef[] = [];
+    for (let i = 0; i < SHIFT_ITEMS; i++) {
+      q.push(i === 5 || i === 13 ? BOTTLE_DEF : drawItem());
+    }
+    return q;
+  };
+
+  // fresh queue per run
   useEffect(() => {
-    spawnedRef.current = 0;
+    queueRef.current = buildQueue();
+  }, [runId]);
+
+  // spawner (dead while the belt is paused for learning)
+  useEffect(() => {
+    if (beltPaused) return;
     const t = setInterval(() => {
-      if (spawnedRef.current >= SHIFT_ITEMS) {
+      const q = queueRef.current;
+      if (q.length === 0) {
         clearInterval(t);
         return;
       }
-      spawnedRef.current += 1;
-      const def = drawItem();
+      const def = q.shift()!;
       const key = ++keyRef.current;
       setItems((prev) => [...prev, { key, def }]);
     }, SPAWN_MS);
     return () => clearInterval(t);
-  }, [runId]);
+  }, [runId, beltPaused]);
 
-  // shift end
+  // shift end (waits out an open modal)
   useEffect(() => {
-    if (resolved >= SHIFT_ITEMS && !done) {
+    if (resolved >= SHIFT_ITEMS && !done && !modal) {
       const t = setTimeout(() => {
         setDone(true);
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       }, 700);
       return () => clearTimeout(t);
     }
-  }, [resolved, done]);
+  }, [resolved, done, modal]);
 
   const addBurst = (x: number, y: number) => {
     const id = ++burstId.current;
@@ -204,9 +280,20 @@ export function BeltScreen() {
     );
   };
 
+  const clearDanger = (key: number) => {
+    dangerKeysRef.current.delete(key);
+    setDanger(dangerKeysRef.current.size > 0);
+  };
+
+  const handleDanger = (key: number) => {
+    dangerKeysRef.current.add(key);
+    setDanger(true);
+  };
+
   const handleDrop = (key: number, defId: string, binIdx: number, x: number, y: number) => {
     const def = ITEM_DEFS.find((d) => d.id === defId)!;
     setItems((prev) => prev.filter((i) => i.key !== key));
+    clearDanger(key);
     const bin = BINS[binIdx];
     if (bin.id === def.bin) {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
@@ -228,6 +315,7 @@ export function BeltScreen() {
 
   const handleMissed = (key: number) => {
     setItems((prev) => prev.filter((i) => i.key !== key));
+    clearDanger(key);
     setMissed((m) => m + 1);
     streakRef.current = 0;
     setStreak(0);
@@ -237,9 +325,41 @@ export function BeltScreen() {
     setResolved((r) => r + 1);
   };
 
+  const handlePrep = (key: number, defId: string, x: number, y: number) => {
+    setItems((prev) => prev.filter((i) => i.key !== key));
+    clearDanger(key);
+    const paused = twistEncounters.current < 2 || peelEncounters.current < 2;
+    twistEncounters.current += 1;
+    peelEncounters.current += 1;
+    setModal({ x, y, paused });
+    if (paused) setBeltPaused(true);
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+  };
+
+  const handleModalClose = (allCorrect: boolean) => {
+    setModal(null);
+    setBeltPaused(false);
+    if (allCorrect) {
+      setCorrect((c) => c + 1);
+      streakRef.current += 1;
+      setStreak(streakRef.current);
+      setBestStreak((b) => Math.max(b, streakRef.current));
+    } else {
+      streakRef.current = 0;
+      setStreak(0);
+    }
+    setHint(null);
+    setResolved((r) => r + 1);
+  };
+
+  const handleBottleNeedsPrep = () => setHint('Prep the bottle first — drop it in the Prep tray');
+  const handlePrepHint = () => setHint('Only bottles need prep');
+
   const replay = () => {
     keyRef.current = 0;
     streakRef.current = 0;
+    dangerKeysRef.current.clear();
+    setDanger(false);
     setItems([]);
     setResolved(0);
     setCorrect(0);
@@ -293,10 +413,22 @@ export function BeltScreen() {
           itemKey={it.key}
           def={it.def}
           binRects={binRects}
+          prepRect={PREP}
+          paused={beltPaused}
           onDrop={handleDrop}
           onMissed={handleMissed}
+          onPrep={handlePrep}
+          onDanger={handleDanger}
+          onBottleNeedsPrep={handleBottleNeedsPrep}
+          onPrepHint={handlePrepHint}
         />
       ))}
+
+      {/* prep drop zone */}
+      <View style={[styles.prep, { left: PREP.x, top: PREP.y, width: PREP.w, height: PREP.h }]} pointerEvents="none">
+        <Text style={styles.prepLabel}>PREP</Text>
+        <Text style={styles.prepSub}>bottles go here</Text>
+      </View>
 
       {/* bins */}
       <View style={styles.bins}>
@@ -311,6 +443,17 @@ export function BeltScreen() {
       {bursts.map((bb) => (
         <Burst key={bb.id} x={bb.x} y={bb.y} />
       ))}
+
+      {/* disassembly modal */}
+      {modal && (
+        <DisassemblyModal
+          origin={{ x: modal.x, y: modal.y }}
+          paused={modal.paused}
+          ticker={queueRef.current.slice(0, 3)}
+          danger={danger}
+          onClose={handleModalClose}
+        />
+      )}
 
       {/* summary */}
       {done && (
@@ -402,6 +545,18 @@ const styles = StyleSheet.create({
     borderRadius: 6,
     overflow: 'hidden',
   },
+  prep: {
+    position: 'absolute',
+    borderWidth: 2,
+    borderStyle: 'dashed',
+    borderColor: '#B9A88F',
+    borderRadius: 16,
+    backgroundColor: 'rgba(232,161,61,0.08)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  prepLabel: { fontSize: 15, fontWeight: '800', letterSpacing: 4, color: '#A08C6D' },
+  prepSub: { fontSize: 11, color: '#A08C6D', marginTop: 2 },
   bins: {
     position: 'absolute',
     left: 0,
