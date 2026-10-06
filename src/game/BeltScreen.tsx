@@ -18,15 +18,16 @@ import {
   Burst,
 } from '../spike/effects';
 import { BINS, ITEM_DEFS, BOTTLE_DEF, drawItem, ItemDef } from './items';
+import { ItemGlyph } from './ItemGlyph';
+import { BinRect } from './binHit';
 import { DisassemblyModal } from './DisassemblyModal';
+import { SinkSlot, SinkItem, sinkRects, SINK_TOP } from './SinkView';
 
 /*
- * Phase 3: belt loop + production disassembly modal.
- * - 20-item shift from a prebuilt queue (bottles at #6 and #14).
- * - Drag a bottle into the PREP tray -> modal zooms from the drop point.
- * - First 2 bottle encounters pause the belt (Ngoc's pause-when-learning);
- *   after that the belt keeps running and the modal shows a live ticker.
- * - Ticker: next 3 queued items + red edge glow when one nears fall-off.
+ * Phase 4: belt loop + disassembly modal + passive rinse sink.
+ * - Dirty items (needsRinse) must soak in the sink before their bin.
+ * - Sink: 3 slots, passive ~15s, 4 pie quarters -> green + haptic when done.
+ * - Drag the clean item out of its slot to sort it.
  */
 
 const BELT_TOP = 250;
@@ -41,30 +42,8 @@ const SPAWN_MS = 2600;
 const SHIFT_ITEMS = 20;
 const CHEV_GAP = 44;
 
-// prep drop zone (main screen, between belt and bins)
+// prep drop zone (main screen, between belt and sink)
 const PREP = { x: SW / 2 - 110, y: 432, w: 220, h: 92 };
-
-interface BinRect { x: number; y: number; w: number; h: number }
-
-export function ItemGlyph({ def, size = 56 }: { def: ItemDef; size?: number }) {
-  const base = {
-    width: size,
-    height: size,
-    backgroundColor: def.color,
-    borderWidth: 3,
-    borderColor: 'rgba(74,63,53,0.35)',
-  };
-  if (def.shape === 'circle') return <View style={[base, { borderRadius: size / 2 }]} />;
-  if (def.shape === 'diamond')
-    return <View style={[base, { borderRadius: 10, transform: [{ rotate: '45deg' }, { scale: 0.8 }] }]} />;
-  if (def.complex)
-    return (
-      <View style={[base, { borderRadius: 12, alignItems: 'center', justifyContent: 'flex-end', paddingBottom: 6 }]}>
-        <View style={{ width: size * 0.34, height: size * 0.2, borderRadius: 5, backgroundColor: C.cap }} />
-      </View>
-    );
-  return <View style={[base, { borderRadius: 12 }]} />;
-}
 
 function BeltItem({
   itemKey,
@@ -72,24 +51,36 @@ function BeltItem({
   binRects,
   prepRect,
   paused,
+  sinkTaken,
   onDrop,
   onMissed,
   onPrep,
   onDanger,
+  onSink,
   onBottleNeedsPrep,
   onPrepHint,
+  onRinseHint,
+  onBottleSinkHint,
+  onSinkBusyHint,
+  onCleanHint,
 }: {
   itemKey: number;
   def: ItemDef;
   binRects: any;
   prepRect: BinRect;
   paused: boolean;
+  sinkTaken: { value: boolean[] };
   onDrop: (key: number, defId: string, binIdx: number, x: number, y: number) => void;
   onMissed: (key: number, defId: string) => void;
   onPrep: (key: number, defId: string, x: number, y: number) => void;
   onDanger: (key: number) => void;
+  onSink: (key: number, defId: string, slotIdx: number, x: number, y: number) => void;
   onBottleNeedsPrep: () => void;
   onPrepHint: () => void;
+  onRinseHint: () => void;
+  onBottleSinkHint: () => void;
+  onSinkBusyHint: () => void;
+  onCleanHint: () => void;
 }) {
   const bx = useSharedValue(SPAWN_X);
   const dx = useSharedValue(0);
@@ -149,6 +140,22 @@ function BeltItem({
     return -1;
   };
 
+  const hitSink = (cx: number, cy: number) => {
+    'worklet';
+    for (let i = 0; i < sinkRects.length; i++) {
+      const r = sinkRects[i];
+      if (cx >= r.x - 8 && cx <= r.x + r.w + 8 && cy >= r.y - 8 && cy <= r.y + r.h + 8) return i;
+    }
+    return -1;
+  };
+
+  const bounce = () => {
+    'worklet';
+    dx.value = withSpring(0, { damping: 18 });
+    dy.value = withSpring(0, { damping: 18 });
+    if (!paused) startTravel();
+  };
+
   const pan = Gesture.Pan()
     .onBegin(() => {
       bx.value = bx.value; // detach from the belt while held
@@ -162,18 +169,37 @@ function BeltItem({
       const cy = ITEM_Y + e.translationY + ITEM_S / 2;
       const prepHit = inPrep(cx, cy);
       const binHit = hitBin(cx, cy);
-      if (def.complex && prepHit) {
-        settled.value = true;
-        runOnJS(onPrep)(itemKey, def.id, cx, cy);
-      } else if (!def.complex && binHit >= 0) {
+      const sinkHit = hitSink(cx, cy);
+      if (def.complex) {
+        if (prepHit) {
+          settled.value = true;
+          runOnJS(onPrep)(itemKey, def.id, cx, cy);
+        } else {
+          bounce();
+          if (binHit >= 0) runOnJS(onBottleNeedsPrep)();
+          else if (sinkHit >= 0) runOnJS(onBottleSinkHint)();
+        }
+        return;
+      }
+      if (def.needsRinse) {
+        if (sinkHit >= 0 && !sinkTaken.value[sinkHit]) {
+          settled.value = true;
+          runOnJS(onSink)(itemKey, def.id, sinkHit, cx, cy);
+        } else {
+          bounce();
+          if (sinkHit >= 0) runOnJS(onSinkBusyHint)();
+          else if (binHit >= 0) runOnJS(onRinseHint)();
+          else if (prepHit) runOnJS(onPrepHint)();
+        }
+        return;
+      }
+      if (binHit >= 0) {
         settled.value = true;
         runOnJS(onDrop)(itemKey, def.id, binHit, cx, cy);
       } else {
-        dx.value = withSpring(0, { damping: 18 });
-        dy.value = withSpring(0, { damping: 18 });
-        if (!paused) startTravel();
-        if (def.complex && binHit >= 0) runOnJS(onBottleNeedsPrep)();
-        else if (!def.complex && prepHit) runOnJS(onPrepHint)();
+        bounce();
+        if (prepHit) runOnJS(onPrepHint)();
+        else if (sinkHit >= 0) runOnJS(onCleanHint)();
       }
     });
 
@@ -203,8 +229,11 @@ export function BeltScreen() {
   const [done, setDone] = useState(false);
   const [runId, setRunId] = useState(0);
   const [modal, setModal] = useState<{ x: number; y: number; paused: boolean } | null>(null);
-  const [beltPaused, setBeltPaused] = useState(false);
+  // derived, never separate state: the belt is paused exactly while a pausing modal is open,
+  // so the flag can't stick if the modal ever goes away by another path
+  const beltPaused = modal?.paused ?? false;
   const [danger, setDanger] = useState(false);
+  const [sinkSlots, setSinkSlots] = useState<(SinkItem | null)[]>([null, null, null]);
 
   const keyRef = useRef(0);
   const streakRef = useRef(0);
@@ -215,6 +244,7 @@ export function BeltScreen() {
   const peelEncounters = useRef(0);
 
   const binRects = useSharedValue<BinRect[]>([]);
+  const sinkTaken = useSharedValue<boolean[]>([false, false, false]);
   const missFlash = useSharedValue(0);
   const scroll = useSharedValue(0);
 
@@ -255,6 +285,11 @@ export function BeltScreen() {
     }, SPAWN_MS);
     return () => clearInterval(t);
   }, [runId, beltPaused]);
+
+  // sink occupancy mirror for the belt items' worklets
+  useEffect(() => {
+    sinkTaken.value = sinkSlots.map((s) => !!s);
+  }, [sinkSlots]);
 
   // shift end (waits out an open modal)
   useEffect(() => {
@@ -332,13 +367,11 @@ export function BeltScreen() {
     twistEncounters.current += 1;
     peelEncounters.current += 1;
     setModal({ x, y, paused });
-    if (paused) setBeltPaused(true);
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
   };
 
   const handleModalClose = (allCorrect: boolean) => {
     setModal(null);
-    setBeltPaused(false);
     if (allCorrect) {
       setCorrect((c) => c + 1);
       streakRef.current += 1;
@@ -352,8 +385,47 @@ export function BeltScreen() {
     setResolved((r) => r + 1);
   };
 
+  const handleSink = (key: number, defId: string, slotIdx: number, x: number, y: number) => {
+    const def = ITEM_DEFS.find((d) => d.id === defId)!;
+    setItems((prev) => prev.filter((i) => i.key !== key));
+    clearDanger(key);
+    setSinkSlots((prev) => prev.map((s, i) => (i === slotIdx ? { key, def } : s)));
+    // synchronous mirror: closes the same-frame double-drop race the effect can't see
+    sinkTaken.value = sinkTaken.value.map((t, i) => (i === slotIdx ? true : t));
+    setHint(null);
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+  };
+
+  const handleSinkDrop = (slotKey: number, defId: string, binIdx: number, x: number, y: number) => {
+    const def = ITEM_DEFS.find((d) => d.id === defId)!;
+    setSinkSlots((prev) => prev.map((s) => (s && s.key === slotKey ? null : s)));
+    const freed = sinkSlots.findIndex((s) => s && s.key === slotKey);
+    if (freed >= 0) sinkTaken.value = sinkTaken.value.map((t, i) => (i === freed ? false : t));
+    const bin = BINS[binIdx];
+    if (bin.id === def.bin) {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+      addBurst(x, y);
+      setCorrect((c) => c + 1);
+      streakRef.current += 1;
+      setStreak(streakRef.current);
+      setBestStreak((b) => Math.max(b, streakRef.current));
+      setHint(null);
+    } else {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+      const right = BINS.find((b) => b.id === def.bin)!;
+      setHint(`${def.name} → ${right.label}`);
+      streakRef.current = 0;
+      setStreak(0);
+    }
+    setResolved((r) => r + 1);
+  };
+
   const handleBottleNeedsPrep = () => setHint('Prep the bottle first — drop it in the Prep tray');
   const handlePrepHint = () => setHint('Only bottles need prep');
+  const handleRinseHint = () => setHint('Rinse it first — drop it in the sink');
+  const handleBottleSinkHint = () => setHint('Bottles go to the Prep tray');
+  const handleSinkBusyHint = () => setHint("That slot's busy");
+  const handleCleanHint = () => setHint("That one's already clean");
 
   const replay = () => {
     keyRef.current = 0;
@@ -361,6 +433,7 @@ export function BeltScreen() {
     dangerKeysRef.current.clear();
     setDanger(false);
     setItems([]);
+    setSinkSlots([null, null, null]);
     setResolved(0);
     setCorrect(0);
     setMissed(0);
@@ -381,6 +454,8 @@ export function BeltScreen() {
 
   const accuracy = resolved > 0 ? correct / resolved : 0;
   const stars = accuracy >= 0.9 ? 3 : accuracy >= 0.7 ? 2 : 1;
+  const waitingOnSink =
+    !done && queueRef.current.length === 0 && items.length === 0 && sinkSlots.some(Boolean);
 
   return (
     <View style={styles.root}>
@@ -394,7 +469,11 @@ export function BeltScreen() {
           <Text style={styles.streak}>{streak > 1 ? `🔥 ×${streak}` : ' '}</Text>
         </View>
       </View>
-      {hint && <Text style={styles.hint}>{hint}</Text>}
+      {(hint || waitingOnSink) && (
+        <Text style={styles.hint}>
+          {hint ?? 'Finish the rinse — drag clean items to their bins'}
+        </Text>
+      )}
 
       {/* belt */}
       <View style={[styles.belt, { top: BELT_TOP, height: BELT_H }]}>
@@ -415,12 +494,18 @@ export function BeltScreen() {
           binRects={binRects}
           prepRect={PREP}
           paused={beltPaused}
+          sinkTaken={sinkTaken}
           onDrop={handleDrop}
           onMissed={handleMissed}
           onPrep={handlePrep}
           onDanger={handleDanger}
+          onSink={handleSink}
           onBottleNeedsPrep={handleBottleNeedsPrep}
           onPrepHint={handlePrepHint}
+          onRinseHint={handleRinseHint}
+          onBottleSinkHint={handleBottleSinkHint}
+          onSinkBusyHint={handleSinkBusyHint}
+          onCleanHint={handleCleanHint}
         />
       ))}
 
@@ -429,6 +514,12 @@ export function BeltScreen() {
         <Text style={styles.prepLabel}>PREP</Text>
         <Text style={styles.prepSub}>bottles go here</Text>
       </View>
+
+      {/* rinse sink */}
+      <Text style={[styles.sinkLabel, { top: SINK_TOP - 26 }]}>RINSE</Text>
+      {sinkSlots.map((s, i) => (
+        <SinkSlot key={i} slot={s} index={i} binRects={binRects} onCleanDrop={handleSinkDrop} />
+      ))}
 
       {/* bins */}
       <View style={styles.bins}>
@@ -557,6 +648,16 @@ const styles = StyleSheet.create({
   },
   prepLabel: { fontSize: 15, fontWeight: '800', letterSpacing: 4, color: '#A08C6D' },
   prepSub: { fontSize: 11, color: '#A08C6D', marginTop: 2 },
+  sinkLabel: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    textAlign: 'center',
+    fontSize: 12,
+    fontWeight: '800',
+    letterSpacing: 4,
+    color: '#8FAE8B',
+  },
   bins: {
     position: 'absolute',
     left: 0,

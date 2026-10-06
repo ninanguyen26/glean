@@ -21,6 +21,7 @@ export interface ItemDef {
   color: string;
   shape: 'circle' | 'rect' | 'diamond';
   complex?: boolean; // needs disassembly in the prep modal
+  needsRinse?: boolean; // must visit the sink before its bin
 }
 
 export const ITEM_DEFS: ItemDef[] = [
@@ -29,8 +30,8 @@ export const ITEM_DEFS: ItemDef[] = [
   { id: 'coffee', name: 'Coffee grounds', bin: 'compost', color: '#7A5230', shape: 'rect' },
   { id: 'pizza', name: 'Pizza box', bin: 'compost', color: '#D9A05F', shape: 'rect' },
   { id: 'news', name: 'Newspaper', bin: 'recycle', color: '#9AA3A8', shape: 'rect' },
-  { id: 'can', name: 'Alu can', bin: 'recycle', color: '#C0CBD2', shape: 'circle' },
-  { id: 'jar', name: 'Glass jar', bin: 'recycle', color: '#7FB3D5', shape: 'rect' },
+  { id: 'can', name: 'Alu can', bin: 'recycle', color: '#C0CBD2', shape: 'circle', needsRinse: true },
+  { id: 'jar', name: 'Glass jar', bin: 'recycle', color: '#7FB3D5', shape: 'rect', needsRinse: true },
   { id: 'chips', name: 'Chip bag', bin: 'landfill', color: '#E8913D', shape: 'rect' },
   { id: 'styro', name: 'Foam cup', bin: 'landfill', color: '#EDEAE2', shape: 'circle' },
   { id: 'butt', name: 'Cig butt', bin: 'landfill', color: '#8A7B68', shape: 'diamond' },

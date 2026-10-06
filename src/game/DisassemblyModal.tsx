@@ -19,6 +19,7 @@ import {
 } from '../spike/effects';
 import { ModalBottle } from '../spike/BottleArt';
 import { BINS, ItemDef } from './items';
+import { hitBinPoint } from './binHit';
 
 /*
  * Phase 3: production disassembly modal.
@@ -187,29 +188,7 @@ export function DisassemblyModal({
     t.ty.value = withSpring(0);
   };
 
-  // ---- gestures ----
-  const hitBinPoint = (cx: number, cy: number) => {
-    'worklet';
-    const rs = binRects.value;
-    // finger release point, with slop; nearest bin center wins ties
-    let best = -1;
-    let bestD = Infinity;
-    for (let i = 0; i < rs.length; i++) {
-      const r = rs[i];
-      const s = 24;
-      if (cx >= r.x - s && cx <= r.x + r.w + s && cy >= r.y - s && cy <= r.y + r.h + s) {
-        const dx = cx - (r.x + r.w / 2);
-        const dy = cy - (r.y + r.h / 2);
-        const d = dx * dx + dy * dy;
-        if (d < bestD) {
-          bestD = d;
-          best = i;
-        }
-      }
-    }
-    return best;
-  };
-
+  // ---- gestures (bin hit-test is the shared ./binHit helper) ----
   // one-finger circular twist; cap center in the 170x120 twist zone = (85, 47)
   const twistGesture = Gesture.Pan()
     .onBegin(() => {
@@ -286,7 +265,7 @@ export function DisassemblyModal({
         // drop location = where the finger released (screen coords)
         const fx = e.absoluteX;
         const fy = e.absoluteY;
-        const hit = hitBinPoint(fx, fy);
+        const hit = hitBinPoint(binRects, fx, fy);
         if (hit === PART_BIN[id]) runOnJS(chipSorted)(id, fx, fy);
         else runOnJS(chipWrong)(id);
       });
