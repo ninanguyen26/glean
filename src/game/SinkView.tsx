@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { View, StyleSheet } from 'react-native';
+import { View, Text, StyleSheet } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, {
   useSharedValue,
@@ -15,36 +15,47 @@ import { ItemGlyph } from './ItemGlyph';
 import { BinRect, hitBinPoint } from './binHit';
 
 /*
- * Phase 4: passive rinse sink. Three slots; dirty items soak here while the
- * belt keeps moving. Four pie quarters fill passively (~15s); all green +
- * haptic tick when done. Drag the clean item out to its bin.
+ * Phase 6 (rework): one big FIFO sink. Unlimited dirty intake; items rinse
+ * one at a time (~15s each) in drop order. Finished items stage on the
+ * side rack (cap 4) for drag-out sorting.
  *
- * Each slot owns its own progress clock so the rinse tick never re-renders
- * the belt screen (recreating every item's gesture mid-drag).
+ * The basin owns the rinse clock so the tick never re-renders the belt
+ * screen (recreating every item's gesture mid-drag).
  */
 
 export const SINK_TOP = 552;
-export const SLOT_S = 92;
-export const SLOT_GAP = 16;
 export const RINSE_SECS = 15;
+export const RACK_CAP = 4;
 
-export const slotX = (i: number) =>
-  (SW - (3 * SLOT_S + 2 * SLOT_GAP)) / 2 + i * (SLOT_S + SLOT_GAP);
+// sink band sits between the PREP tray (ends 524) and the bins (start ~664)
+export const BASIN = { x: 24, y: 544, w: 180, h: 108 };
+export const RACK = { x: 216, y: 524, w: SW - 240, h: 136 };
 
-export const sinkRects: BinRect[] = [0, 1, 2].map((i) => ({
-  x: slotX(i),
-  y: SINK_TOP,
-  w: SLOT_S,
-  h: SLOT_S,
-}));
+// single drop target for dirty items
+export const basinRect: BinRect = { x: BASIN.x, y: BASIN.y, w: BASIN.w, h: BASIN.h };
+
+const RACK_S = 50;
+const rackSlot = (i: number) => {
+  const gw = 2 * RACK_S + 8;
+  const ox = RACK.x + (RACK.w - gw) / 2;
+  return {
+    x: ox + (i % 2) * (RACK_S + 8),
+    y: RACK.y + 28 + Math.floor(i / 2) * (RACK_S + 8),
+    s: RACK_S,
+  };
+};
+
+export type SinkStatus = 'queued' | 'rinsing' | 'done' | 'rack';
 
 export interface SinkItem {
   key: number;
   def: ItemDef;
+  seq: number;
+  status: SinkStatus;
 }
 
 /* Four-quarter pie: each quarter fills continuously as its turn comes,
-   so the pie starts moving the instant the item lands; all green when done. */
+   so the pie starts moving the instant the rinse starts; green when done. */
 function RinsePie({ progress, size = 76 }: { progress: number; size?: number }) {
   const done = progress >= 1;
   const r = size / 2 - 3;
@@ -71,60 +82,109 @@ function RinsePie({ progress, size = 76 }: { progress: number; size?: number }) 
   );
 }
 
-export function SinkSlot({
-  slot,
+export function SinkBasin({
+  items,
+  onRinseDone,
+}: {
+  items: SinkItem[];
+  onRinseDone: (key: number) => void;
+}) {
+  const rinsing = items.find((i) => i.status === 'rinsing');
+  const queued = items.filter((i) => i.status === 'queued');
+  const done = items.filter((i) => i.status === 'done');
+  const [progress, setProgress] = useState(0);
+  const onRinseDoneRef = useRef(onRinseDone);
+  onRinseDoneRef.current = onRinseDone;
+
+  // passive rinse clock (basin-local, never touches the belt screen).
+  // The key is captured in the closure so completion always fires for the
+  // item that actually soaked, never a successor on a stale render.
+  useEffect(() => {
+    if (!rinsing) return;
+    const key = rinsing.key;
+    let fired = false;
+    setProgress(0);
+    const t = setInterval(() => {
+      setProgress((p) => {
+        const n = Math.min(1, p + 0.1 / RINSE_SECS);
+        if (n >= 1 && !fired) {
+          fired = true;
+          clearInterval(t);
+          setTimeout(() => {
+            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+            onRinseDoneRef.current(key);
+          }, 0);
+        }
+        return n;
+      });
+    }, 100);
+    return () => clearInterval(t);
+  }, [rinsing?.key]);
+
+  return (
+    <View style={[styles.basin, { left: BASIN.x, top: BASIN.y, width: BASIN.w, height: BASIN.h }]}>
+      <Text style={styles.basinLabel}>SINK</Text>
+      {rinsing ? (
+        <View style={styles.rinsing}>
+          <RinsePie progress={progress} size={68} />
+          <View style={styles.glyph}>
+            <ItemGlyph def={rinsing.def} size={36} />
+          </View>
+        </View>
+      ) : (
+        <View style={styles.rinsing}>
+          <Text style={styles.idle}>drop dirty items here</Text>
+        </View>
+      )}
+      <View style={styles.queue}>
+        {queued.slice(0, 3).map((q) => (
+          <View key={q.key} style={styles.qGlyph}>
+            <ItemGlyph def={q.def} size={26} />
+          </View>
+        ))}
+        {queued.length > 3 && <Text style={styles.qMore}>+{queued.length - 3}</Text>}
+        {done.map((d) => (
+          <View key={d.key} style={styles.qGlyph}>
+            <ItemGlyph def={d.def} size={26} />
+            <Text style={styles.doneCheck}>✓</Text>
+          </View>
+        ))}
+      </View>
+    </View>
+  );
+}
+
+export function RackSlot({
+  item,
   index,
   binRects,
   onCleanDrop,
 }: {
-  slot: SinkItem | null;
+  item: SinkItem | null;
   index: number;
   binRects: { value: BinRect[] };
-  onCleanDrop: (slotKey: number, defId: string, binIdx: number, x: number, y: number) => void;
+  onCleanDrop: (key: number, defId: string, binIdx: number, x: number, y: number) => void;
 }) {
-  const [progress, setProgress] = useState(0);
   const tx = useSharedValue(0);
   const ty = useSharedValue(0);
-  const wasDone = useRef(false);
-  const done = progress >= 1;
+  const s = rackSlot(index);
 
-  // fresh item -> restart the soak
+  // fresh item -> recenter the drag
   useEffect(() => {
-    setProgress(0);
-    wasDone.current = false;
     tx.value = 0;
     ty.value = 0;
-  }, [slot?.key]);
-
-  // passive rinse clock (per-slot, never touches the belt screen)
-  const isSoaking = !!slot && !done;
-  useEffect(() => {
-    if (!isSoaking) return;
-    const t = setInterval(() => {
-      setProgress((p) => Math.min(1, p + 0.1 / RINSE_SECS));
-    }, 100);
-    return () => clearInterval(t);
-  }, [isSoaking]);
-
-  // completion tick
-  useEffect(() => {
-    if (done && !wasDone.current && slot) {
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-    }
-    wasDone.current = done;
-  }, [done, slot]);
+  }, [item?.key]);
 
   const pan = Gesture.Pan()
     .onUpdate((e) => {
-      if (!done) return;
       tx.value = e.translationX;
       ty.value = e.translationY;
     })
     .onEnd((e) => {
-      if (!done || !slot) return;
+      if (!item) return;
       const hit = hitBinPoint(binRects, e.absoluteX, e.absoluteY);
       if (hit >= 0) {
-        runOnJS(onCleanDrop)(slot.key, slot.def.id, hit, e.absoluteX, e.absoluteY);
+        runOnJS(onCleanDrop)(item.key, item.def.id, hit, e.absoluteX, e.absoluteY);
       } else {
         tx.value = withSpring(0, { damping: 18 });
         ty.value = withSpring(0, { damping: 18 });
@@ -136,47 +196,108 @@ export function SinkSlot({
   }));
 
   return (
-    <View style={[styles.slot, { left: slotX(index), top: SINK_TOP }]}>
-      {!slot ? (
-        <View style={styles.empty} />
-      ) : (
+    <View style={[styles.rackSlot, { left: s.x, top: s.y, width: s.s, height: s.s }]}>
+      {item ? (
         <GestureDetector gesture={pan}>
-          <Animated.View style={[styles.inner, dragStyle]}>
-            <RinsePie progress={progress} />
-            <View style={styles.glyph}>
-              <ItemGlyph def={slot.def} size={44} />
-            </View>
+          <Animated.View style={[styles.rackInner, dragStyle]}>
+            <ItemGlyph def={item.def} size={40} />
           </Animated.View>
         </GestureDetector>
+      ) : (
+        <View style={styles.rackEmpty} />
       )}
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  slot: {
+  basin: {
     position: 'absolute',
-    width: SLOT_S,
-    height: SLOT_S,
+    backgroundColor: 'rgba(127,179,213,0.16)',
+    borderRadius: 20,
+    borderWidth: 2,
+    borderColor: 'rgba(127,179,213,0.35)',
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingLeft: 12,
+  },
+  basinLabel: {
+    position: 'absolute',
+    left: 14,
+    top: 6,
+    fontSize: 11,
+    fontWeight: '800',
+    letterSpacing: 3,
+    color: '#7FA3B8',
+  },
+  rinsing: {
+    width: 80,
+    height: 80,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginTop: 16,
+  },
+  glyph: {
+    position: 'absolute',
+  },
+  idle: {
+    textAlign: 'center',
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#7FA3B8',
+    lineHeight: 18,
+  },
+  queue: {
+    flex: 1,
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    alignItems: 'center',
+    paddingRight: 8,
+    marginTop: 10,
+    gap: 2,
+  },
+  qGlyph: {
+    width: 30,
+    height: 30,
     justifyContent: 'center',
     alignItems: 'center',
   },
-  empty: {
-    width: SLOT_S - 8,
-    height: SLOT_S - 8,
-    borderRadius: 20,
+  qMore: {
+    fontSize: 13,
+    fontWeight: '800',
+    color: '#7FA3B8',
+    marginLeft: 2,
+  },
+  doneCheck: {
+    position: 'absolute',
+    right: -2,
+    bottom: -2,
+    fontSize: 14,
+    fontWeight: '900',
+    color: '#7FB069',
+    backgroundColor: '#fff',
+    borderRadius: 8,
+    overflow: 'hidden',
+    paddingHorizontal: 2,
+  },
+  rackSlot: {
+    position: 'absolute',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  rackEmpty: {
+    width: '100%',
+    height: '100%',
+    borderRadius: 14,
     borderWidth: 2,
     borderStyle: 'dashed',
     borderColor: '#C9B998',
     backgroundColor: 'rgba(123,174,110,0.07)',
   },
-  inner: {
-    width: SLOT_S,
-    height: SLOT_S,
+  rackInner: {
+    width: '100%',
+    height: '100%',
     justifyContent: 'center',
     alignItems: 'center',
-  },
-  glyph: {
-    position: 'absolute',
   },
 });

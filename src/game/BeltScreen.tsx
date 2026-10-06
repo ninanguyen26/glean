@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { View, Text, StyleSheet, Pressable } from 'react-native';
+import { View, Text, StyleSheet } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, {
   useSharedValue,
@@ -21,15 +21,24 @@ import { BINS, GameItem, ItemDef } from './items';
 import { ItemGlyph } from './ItemGlyph';
 import { BinRect } from './binHit';
 import { DisassemblyModal } from './DisassemblyModal';
-import { SinkSlot, SinkItem, sinkRects, SINK_TOP } from './SinkView';
-import { loadRegionItems } from './db';
+import { SinkBasin, RackSlot, SinkItem, SinkStatus, basinRect, RACK, RACK_CAP } from './SinkView';
+import { loadUnionItems } from './db';
 
 /*
- * Phase 5: belt loop + disassembly modal + rinse sink, all data-driven.
- * The item pool loads from SQLite (seeded from data/seed/items.json),
- * falling back to the bundled JSON until the dev client is rebuilt with
- * the expo-sqlite native module.
+ * Phase 6: belt loop as a parameterized shift — region pool, workweek day
+ * or endless score-attack, mistake-as-lesson, result reported to GameRoot.
  */
+
+export interface ShiftResult {
+  correct: number;
+  total: number;
+  missed: number;
+  bestStreak: number;
+  stars: number;
+  lessons: string[];
+  score: number;
+  newBest?: boolean;
+}
 
 const BELT_TOP = 250;
 const BELT_H = 120;
@@ -42,6 +51,7 @@ const SPEED = 110; // pt/s
 const SPAWN_MS = 2600;
 const SHIFT_ITEMS = 20;
 const CHEV_GAP = 44;
+const ENDLESS_LIVES = 3;
 
 // prep drop zone (main screen, between belt and sink)
 const PREP = { x: SW / 2 - 110, y: 432, w: 220, h: 92 };
@@ -52,7 +62,6 @@ function BeltItem({
   binRects,
   prepRect,
   paused,
-  sinkTaken,
   onDrop,
   onMissed,
   onPrep,
@@ -62,7 +71,6 @@ function BeltItem({
   onPrepHint,
   onRinseHint,
   onBottleSinkHint,
-  onSinkBusyHint,
   onCleanHint,
 }: {
   itemKey: number;
@@ -70,17 +78,15 @@ function BeltItem({
   binRects: any;
   prepRect: BinRect;
   paused: boolean;
-  sinkTaken: { value: boolean[] };
   onDrop: (key: number, defId: string, binIdx: number, x: number, y: number) => void;
   onMissed: (key: number, defId: string) => void;
   onPrep: (key: number, def: GameItem, x: number, y: number) => void;
   onDanger: (key: number) => void;
-  onSink: (key: number, defId: string, slotIdx: number, x: number, y: number) => void;
+  onSink: (key: number, defId: string, x: number, y: number) => void;
   onBottleNeedsPrep: () => void;
   onPrepHint: () => void;
   onRinseHint: () => void;
   onBottleSinkHint: () => void;
-  onSinkBusyHint: () => void;
   onCleanHint: () => void;
 }) {
   const bx = useSharedValue(SPAWN_X);
@@ -143,11 +149,8 @@ function BeltItem({
 
   const hitSink = (cx: number, cy: number) => {
     'worklet';
-    for (let i = 0; i < sinkRects.length; i++) {
-      const r = sinkRects[i];
-      if (cx >= r.x - 8 && cx <= r.x + r.w + 8 && cy >= r.y - 8 && cy <= r.y + r.h + 8) return i;
-    }
-    return -1;
+    const r = basinRect;
+    return cx >= r.x - 8 && cx <= r.x + r.w + 8 && cy >= r.y - 8 && cy <= r.y + r.h + 8;
   };
 
   const bounce = () => {
@@ -178,18 +181,17 @@ function BeltItem({
         } else {
           bounce();
           if (binHit >= 0) runOnJS(onBottleNeedsPrep)();
-          else if (sinkHit >= 0) runOnJS(onBottleSinkHint)();
+          else if (sinkHit) runOnJS(onBottleSinkHint)();
         }
         return;
       }
       if (def.needsRinse) {
-        if (sinkHit >= 0 && !sinkTaken.value[sinkHit]) {
+        if (sinkHit) {
           settled.value = true;
-          runOnJS(onSink)(itemKey, def.id, sinkHit, cx, cy);
+          runOnJS(onSink)(itemKey, def.id, cx, cy);
         } else {
           bounce();
-          if (sinkHit >= 0) runOnJS(onSinkBusyHint)();
-          else if (binHit >= 0) runOnJS(onRinseHint)();
+          if (binHit >= 0) runOnJS(onRinseHint)();
           else if (prepHit) runOnJS(onPrepHint)();
         }
         return;
@@ -200,7 +202,7 @@ function BeltItem({
       } else {
         bounce();
         if (prepHit) runOnJS(onPrepHint)();
-        else if (sinkHit >= 0) runOnJS(onCleanHint)();
+        else if (sinkHit) runOnJS(onCleanHint)();
       }
     });
 
@@ -218,7 +220,17 @@ function BeltItem({
   );
 }
 
-export function BeltScreen() {
+export function BeltScreen({
+  regionId,
+  title,
+  endless,
+  onShiftEnd,
+}: {
+  regionId: string | string[];
+  title: string;
+  endless?: boolean;
+  onShiftEnd: (r: ShiftResult) => void;
+}) {
   const [pool, setPool] = useState<GameItem[] | null>(null);
   const [items, setItems] = useState<{ key: number; def: ItemDef }[]>([]);
   const [resolved, setResolved] = useState(0);
@@ -226,15 +238,16 @@ export function BeltScreen() {
   const [missed, setMissed] = useState(0);
   const [streak, setStreak] = useState(0);
   const [bestStreak, setBestStreak] = useState(0);
+  const [lives, setLives] = useState(ENDLESS_LIVES);
   const [hint, setHint] = useState<string | null>(null);
   const [bursts, setBursts] = useState<{ id: number; x: number; y: number }[]>([]);
-  const [done, setDone] = useState(false);
   const [runId, setRunId] = useState(0);
   const [modal, setModal] = useState<{ x: number; y: number; paused: boolean; item: GameItem } | null>(null);
   const [danger, setDanger] = useState(false);
-  const [sinkSlots, setSinkSlots] = useState<(SinkItem | null)[]>([null, null, null]);
+  const [sinkItems, setSinkItems] = useState<SinkItem[]>([]);
 
   const keyRef = useRef(0);
+  const seqRef = useRef(0);
   const streakRef = useRef(0);
   const burstId = useRef(0);
   const queueRef = useRef<ItemDef[]>([]);
@@ -243,9 +256,12 @@ export function BeltScreen() {
   const dangerKeysRef = useRef<Set<number>>(new Set());
   const twistEncounters = useRef(0);
   const peelEncounters = useRef(0);
+  const lessonsRef = useRef(new Map<string, string>());
+  const endedRef = useRef(false);
+  const onShiftEndRef = useRef(onShiftEnd);
+  onShiftEndRef.current = onShiftEnd;
 
   const binRects = useSharedValue<BinRect[]>([]);
-  const sinkTaken = useSharedValue<boolean[]>([false, false, false]);
   const missFlash = useSharedValue(0);
   const scroll = useSharedValue(0);
 
@@ -261,13 +277,15 @@ export function BeltScreen() {
     );
   }, []);
 
-  // load the Portland pool (SQLite, JSON fallback)
+  // load the region pool (SQLite, JSON fallback)
+  const regionKey = JSON.stringify(regionId);
   useEffect(() => {
-    loadRegionItems('portland').then((p) => {
+    const ids = Array.isArray(regionId) ? regionId : [regionId];
+    loadUnionItems(ids).then((p) => {
       poolRef.current = p;
       setPool(p);
     });
-  }, []);
+  }, [regionKey]);
 
   // random draw from the spawnable pool (complex items only once their
   // mechanic exists; the bottle's twist-peel does)
@@ -279,11 +297,11 @@ export function BeltScreen() {
     return spawnable[i];
   };
 
-  const buildQueue = (p: GameItem[]): GameItem[] => {
+  const buildQueue = (p: GameItem[], n: number): GameItem[] => {
     const q: GameItem[] = [];
-    const bottle = p.find((it) => it.id === 'bottle')!;
-    for (let i = 0; i < SHIFT_ITEMS; i++) {
-      q.push(i === 5 || i === 13 ? bottle : drawFromPool(p));
+    const bottle = p.find((it) => it.id === 'bottle');
+    for (let i = 0; i < n; i++) {
+      q.push(bottle && (i === 5 || i === 13) ? bottle : drawFromPool(p));
     }
     return q;
   };
@@ -291,40 +309,51 @@ export function BeltScreen() {
   // fresh queue per run, once the pool is loaded
   useEffect(() => {
     if (!pool) return;
-    queueRef.current = buildQueue(pool);
+    queueRef.current = buildQueue(pool, SHIFT_ITEMS);
   }, [runId, pool]);
 
-  // spawner (dead while the belt is paused for learning)
+  // spawner (dead while the belt is paused for learning; refills in endless)
   useEffect(() => {
     if (beltPaused || !pool) return;
     const t = setInterval(() => {
       const q = queueRef.current;
       if (q.length === 0) {
-        clearInterval(t);
-        return;
+        if (endless) {
+          q.push(...buildQueue(poolRef.current, 8));
+        } else {
+          clearInterval(t);
+          return;
+        }
       }
       const def = q.shift()!;
       const key = ++keyRef.current;
       setItems((prev) => [...prev, { key, def }]);
     }, SPAWN_MS);
     return () => clearInterval(t);
-  }, [runId, beltPaused, pool]);
+  }, [runId, beltPaused, pool, endless]);
 
-  // sink occupancy mirror for the belt items' worklets
+  // shift end (waits out an open modal), reported once to GameRoot
   useEffect(() => {
-    sinkTaken.value = sinkSlots.map((s) => !!s);
-  }, [sinkSlots]);
-
-  // shift end (waits out an open modal)
-  useEffect(() => {
-    if (resolved >= SHIFT_ITEMS && !done && !modal) {
-      const t = setTimeout(() => {
-        setDone(true);
-        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      }, 700);
-      return () => clearTimeout(t);
-    }
-  }, [resolved, done, modal]);
+    if (endedRef.current) return;
+    const finished = endless ? lives <= 0 : resolved >= SHIFT_ITEMS;
+    if (!finished || modal) return;
+    endedRef.current = true;
+    const t = setTimeout(() => {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      const accuracy = resolved > 0 ? correct / resolved : 0;
+      const stars = accuracy >= 0.9 ? 3 : accuracy >= 0.7 ? 2 : 1;
+      onShiftEndRef.current({
+        correct,
+        total: resolved,
+        missed,
+        bestStreak,
+        stars,
+        lessons: Array.from(lessonsRef.current.values()),
+        score: correct,
+      });
+    }, 700);
+    return () => clearTimeout(t);
+  }, [resolved, lives, modal, endless, correct, missed, bestStreak]);
 
   const addBurst = (x: number, y: number) => {
     const id = ++burstId.current;
@@ -351,6 +380,19 @@ export function BeltScreen() {
 
   const findDef = (defId: string) => poolRef.current.find((d) => d.id === defId)!;
 
+  // mistake-as-lesson: first miss per item per shift teaches, repeats just sting
+  const wrongSort = (def: GameItem) => {
+    const right = BINS.find((b) => b.id === def.bin)!;
+    if (def.teaching && !lessonsRef.current.has(def.id)) {
+      lessonsRef.current.set(def.id, def.teaching);
+      setHint(`Lesson: ${def.teaching} → ${right.label}`);
+    } else {
+      setHint(`${def.name} → ${right.label}`);
+    }
+    streakRef.current = 0;
+    setStreak(0);
+  };
+
   const handleDrop = (key: number, defId: string, binIdx: number, x: number, y: number) => {
     const def = findDef(defId);
     setItems((prev) => prev.filter((i) => i.key !== key));
@@ -366,10 +408,7 @@ export function BeltScreen() {
       setHint(null);
     } else {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
-      const right = BINS.find((b) => b.id === def.bin)!;
-      setHint(`${def.name} → ${right.label}`);
-      streakRef.current = 0;
-      setStreak(0);
+      wrongSort(def);
     }
     setResolved((r) => r + 1);
   };
@@ -378,6 +417,7 @@ export function BeltScreen() {
     setItems((prev) => prev.filter((i) => i.key !== key));
     clearDanger(key);
     setMissed((m) => m + 1);
+    if (endless) setLives((l) => l - 1);
     streakRef.current = 0;
     setStreak(0);
     setHint('Missed — that contaminates the line');
@@ -411,22 +451,40 @@ export function BeltScreen() {
     setResolved((r) => r + 1);
   };
 
-  const handleSink = (key: number, defId: string, slotIdx: number, x: number, y: number) => {
+  // FIFO pump: done -> rack (cap 4, oldest first), then oldest queued -> rinsing
+  const pumpSink = (items: SinkItem[]): SinkItem[] => {
+    const next = [...items];
+    let di = next.findIndex((i) => i.status === 'done');
+    while (di >= 0 && next.filter((i) => i.status === 'rack').length < RACK_CAP) {
+      next[di] = { ...next[di], status: 'rack' };
+      di = next.findIndex((i) => i.status === 'done');
+    }
+    if (!next.some((i) => i.status === 'rinsing')) {
+      const qi = next.findIndex((i) => i.status === 'queued');
+      if (qi >= 0) next[qi] = { ...next[qi], status: 'rinsing' };
+    }
+    return next;
+  };
+
+  const handleSink = (key: number, defId: string, x: number, y: number) => {
     const def = findDef(defId);
     setItems((prev) => prev.filter((i) => i.key !== key));
     clearDanger(key);
-    setSinkSlots((prev) => prev.map((s, i) => (i === slotIdx ? { key, def } : s)));
-    // synchronous mirror: closes the same-frame double-drop race the effect can't see
-    sinkTaken.value = sinkTaken.value.map((t, i) => (i === slotIdx ? true : t));
+    const item: SinkItem = { key, def, seq: seqRef.current++, status: 'queued' };
+    setSinkItems((prev) => pumpSink([...prev, item]));
     setHint(null);
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
   };
 
-  const handleSinkDrop = (slotKey: number, defId: string, binIdx: number, x: number, y: number) => {
+  const handleRinseDone = (key: number) => {
+    setSinkItems((prev) =>
+      pumpSink(prev.map((it) => (it.key === key ? { ...it, status: 'done' as SinkStatus } : it))),
+    );
+  };
+
+  const handleRackDrop = (key: number, defId: string, binIdx: number, x: number, y: number) => {
     const def = findDef(defId);
-    setSinkSlots((prev) => prev.map((s) => (s && s.key === slotKey ? null : s)));
-    const freed = sinkSlots.findIndex((s) => s && s.key === slotKey);
-    if (freed >= 0) sinkTaken.value = sinkTaken.value.map((t, i) => (i === freed ? false : t));
+    setSinkItems((prev) => pumpSink(prev.filter((it) => it.key !== key)));
     const bin = BINS[binIdx];
     if (bin.id === def.bin) {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
@@ -438,10 +496,7 @@ export function BeltScreen() {
       setHint(null);
     } else {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
-      const right = BINS.find((b) => b.id === def.bin)!;
-      setHint(`${def.name} → ${right.label}`);
-      streakRef.current = 0;
-      setStreak(0);
+      wrongSort(def);
     }
     setResolved((r) => r + 1);
   };
@@ -450,27 +505,7 @@ export function BeltScreen() {
   const handlePrepHint = () => setHint('Only bottles need prep');
   const handleRinseHint = () => setHint('Rinse it first — drop it in the sink');
   const handleBottleSinkHint = () => setHint('Bottles go to the Prep tray');
-  const handleSinkBusyHint = () => setHint("That slot's busy");
   const handleCleanHint = () => setHint("That one's already clean");
-
-  const replay = () => {
-    keyRef.current = 0;
-    streakRef.current = 0;
-    dangerKeysRef.current.clear();
-    lastDrawRef.current = -1;
-    setDanger(false);
-    setItems([]);
-    setSinkSlots([null, null, null]);
-    setResolved(0);
-    setCorrect(0);
-    setMissed(0);
-    setStreak(0);
-    setBestStreak(0);
-    setHint(null);
-    setBursts([]);
-    setDone(false);
-    setRunId((r) => r + 1);
-  };
 
   const chevStyle = useAnimatedStyle(() => ({
     transform: [{ translateX: scroll.value }],
@@ -479,15 +514,19 @@ export function BeltScreen() {
     opacity: missFlash.value,
   }));
 
-  const accuracy = resolved > 0 ? correct / resolved : 0;
-  const stars = accuracy >= 0.9 ? 3 : accuracy >= 0.7 ? 2 : 1;
   const waitingOnSink =
-    !done && pool !== null && queueRef.current.length === 0 && items.length === 0 && sinkSlots.some(Boolean);
+    !endless &&
+    pool !== null &&
+    queueRef.current.length === 0 &&
+    items.length === 0 &&
+    sinkItems.length > 0;
+
+  const rackItems = sinkItems.filter((i) => i.status === 'rack');
 
   if (!pool) {
     return (
       <View style={[styles.root, styles.loadingWrap]}>
-        <Text style={styles.loading}>Loading Portland…</Text>
+        <Text style={styles.loading}>Loading…</Text>
       </View>
     );
   }
@@ -497,11 +536,15 @@ export function BeltScreen() {
       {/* HUD */}
       <View style={styles.hud}>
         <View>
-          <Text style={styles.hudTitle}>SHIFT 1</Text>
-          <Text style={styles.hudSub}>{resolved}/{SHIFT_ITEMS} sorted</Text>
+          <Text style={styles.hudTitle}>{title}</Text>
+          <Text style={styles.hudSub}>
+            {endless ? `score ${correct}` : `${resolved}/${SHIFT_ITEMS} sorted`}
+          </Text>
         </View>
         <View style={styles.streakWrap}>
-          <Text style={styles.streak}>{streak > 1 ? `🔥 ×${streak}` : ' '}</Text>
+          <Text style={styles.streak}>
+            {endless ? '❤'.repeat(Math.max(0, lives)) : streak > 1 ? `🔥 ×${streak}` : ' '}
+          </Text>
         </View>
       </View>
       {(hint || waitingOnSink) && (
@@ -529,7 +572,6 @@ export function BeltScreen() {
           binRects={binRects}
           prepRect={PREP}
           paused={beltPaused}
-          sinkTaken={sinkTaken}
           onDrop={handleDrop}
           onMissed={handleMissed}
           onPrep={handlePrep}
@@ -539,7 +581,6 @@ export function BeltScreen() {
           onPrepHint={handlePrepHint}
           onRinseHint={handleRinseHint}
           onBottleSinkHint={handleBottleSinkHint}
-          onSinkBusyHint={handleSinkBusyHint}
           onCleanHint={handleCleanHint}
         />
       ))}
@@ -550,10 +591,17 @@ export function BeltScreen() {
         <Text style={styles.prepSub}>bottles go here</Text>
       </View>
 
-      {/* rinse sink */}
-      <Text style={[styles.sinkLabel, { top: SINK_TOP - 26 }]}>RINSE</Text>
-      {sinkSlots.map((s, i) => (
-        <SinkSlot key={i} slot={s} index={i} binRects={binRects} onCleanDrop={handleSinkDrop} />
+      {/* rinse sink: big FIFO basin + clean rack on the side (cap 4) */}
+      <SinkBasin items={sinkItems} onRinseDone={handleRinseDone} />
+      <Text style={[styles.rackLabel, { left: RACK.x, top: RACK.y + 4 }]}>CLEAN</Text>
+      {[0, 1, 2, 3].map((i) => (
+        <RackSlot
+          key={i}
+          item={rackItems[i] ?? null}
+          index={i}
+          binRects={binRects}
+          onCleanDrop={handleRackDrop}
+        />
       ))}
 
       {/* bins */}
@@ -580,22 +628,6 @@ export function BeltScreen() {
           parts={modal.item.parts ?? []}
           onClose={handleModalClose}
         />
-      )}
-
-      {/* summary */}
-      {done && (
-        <View style={styles.summaryWrap}>
-          <View style={styles.summary}>
-            <Text style={styles.sumKicker}>SHIFT COMPLETE</Text>
-            <Text style={styles.sumStars}>{'★'.repeat(stars)}{'☆'.repeat(3 - stars)}</Text>
-            <Text style={styles.sumLine}>Accuracy  {Math.round(accuracy * 100)}%</Text>
-            <Text style={styles.sumLine}>Best streak  ×{bestStreak}</Text>
-            <Text style={styles.sumLine}>Missed  {missed}</Text>
-            <Pressable onPress={replay} style={styles.replay}>
-              <Text style={styles.replayText}>Run it again</Text>
-            </Pressable>
-          </View>
-        </View>
       )}
     </View>
   );
@@ -686,14 +718,11 @@ const styles = StyleSheet.create({
   },
   prepLabel: { fontSize: 15, fontWeight: '800', letterSpacing: 4, color: '#A08C6D' },
   prepSub: { fontSize: 11, color: '#A08C6D', marginTop: 2 },
-  sinkLabel: {
+  rackLabel: {
     position: 'absolute',
-    left: 0,
-    right: 0,
-    textAlign: 'center',
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: '800',
-    letterSpacing: 4,
+    letterSpacing: 3,
     color: '#8FAE8B',
   },
   bins: {
@@ -713,36 +742,4 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   binLabel: { color: '#fff', fontWeight: '800', fontSize: 15 },
-  summaryWrap: {
-    position: 'absolute',
-    left: 0,
-    right: 0,
-    top: 0,
-    bottom: 0,
-    backgroundColor: 'rgba(46,36,28,0.45)',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  summary: {
-    backgroundColor: '#FFFDF8',
-    borderRadius: 20,
-    padding: 28,
-    alignItems: 'center',
-    width: SW - 96,
-    shadowColor: '#000',
-    shadowOpacity: 0.15,
-    shadowRadius: 16,
-    shadowOffset: { width: 0, height: 6 },
-  },
-  sumKicker: { fontSize: 12, fontWeight: '700', letterSpacing: 2, color: C.sub },
-  sumStars: { fontSize: 40, color: C.gold, marginVertical: 10 },
-  sumLine: { fontSize: 16, color: C.ink, marginTop: 4, fontWeight: '600' },
-  replay: {
-    marginTop: 18,
-    backgroundColor: C.ink,
-    borderRadius: 12,
-    paddingHorizontal: 26,
-    paddingVertical: 13,
-  },
-  replayText: { color: '#fff', fontWeight: '700', fontSize: 15 },
 });

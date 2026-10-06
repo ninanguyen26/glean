@@ -5,7 +5,39 @@
       "name": "Portland",
       "streams": ["compost", "recycle", "landfill"],
       "workweekDays": 5,
-      "blurb": "Keep Portland weird. And sorted."
+      "blurb": "Keep Portland weird. And sorted.",
+      "unlockStars": 0,
+      "rules": [
+        "Greasy pizza boxes go to compost",
+        "Black plastic → landfill — the sorters can't see it",
+        "Rinse jars, cans and bottles first"
+      ]
+    },
+    {
+      "id": "toronto",
+      "name": "Toronto",
+      "streams": ["compost", "recycle", "landfill"],
+      "workweekDays": 5,
+      "blurb": "Sorry, your garbage is showing.",
+      "unlockStars": 8,
+      "rules": [
+        "Paper cups → landfill (plastic lining)",
+        "Milk bags go in the blue bin",
+        "Rinse tins and jars first"
+      ]
+    },
+    {
+      "id": "uk",
+      "name": "The UK",
+      "streams": ["compost", "recycle", "landfill"],
+      "workweekDays": 5,
+      "blurb": "Keep calm and sort on.",
+      "unlockStars": 15,
+      "rules": [
+        "Tea bags go to compost",
+        "Crisp packets → landfill",
+        "Rinse tins and glass first"
+      ]
     }
   ]
 }

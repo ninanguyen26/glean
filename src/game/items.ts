@@ -40,3 +40,13 @@ export interface GameItem {
 
 /** Legacy alias used across game code. */
 export type ItemDef = GameItem;
+
+export interface RegionDef {
+  id: string;
+  name: string;
+  streams: BinId[];
+  workweekDays: number;
+  blurb: string;
+  unlockStars: number;
+  rules: string[];
+}

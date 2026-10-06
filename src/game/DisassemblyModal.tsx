@@ -173,8 +173,8 @@ export function DisassemblyModal({
         setTimeout(() => {
           Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
           setStep('done');
-          setTimeout(() => onClose(wrongRef.current === 0), 1100);
-        }, 650);
+          setTimeout(() => onClose(wrongRef.current === 0), 650);
+        }, 450);
       }
       return n;
     });
