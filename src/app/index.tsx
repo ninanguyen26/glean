@@ -1,13 +1,13 @@
 import React from 'react';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
-import { SpikeScreen } from '../spike/SpikeScreen';
+import { BeltScreen } from '../game/BeltScreen';
 
-// Phase 1 feel spike: single bottle, twist/peel/sort. Replaced by the real
-// belt screen in phase 2.
+// Phase 2: core belt loop. The phase-1 spike lives on in src/spike/
+// and gets rebuilt as the production disassembly modal in phase 3.
 export default function Index() {
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
-      <SpikeScreen />
+      <BeltScreen />
     </GestureHandlerRootView>
   );
 }
