@@ -11,6 +11,7 @@ import {
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import Animated, {
   Easing,
+  FadeIn,
   runOnJS,
   useAnimatedReaction,
   useAnimatedStyle,
@@ -20,7 +21,7 @@ import Animated, {
   withSpring,
   withTiming,
 } from "react-native-reanimated";
-import { playCorrect, playWrong } from "../audio/sounds";
+import { playCorrect, playSinkDrop, playWrong } from "../audio/sounds";
 import { palette } from "../constants/theme";
 import {
   BIN_BOTTOM,
@@ -34,11 +35,13 @@ import {
   SW,
 } from "../spike/effects";
 import { BinRect } from "./binHit";
+import { CoffeeCupModal } from "./CoffeeCupModal";
 import {
   addCash,
-  addXP,
   drawSeasonal,
   getActiveSeason,
+  getCash,
+  getTotalStars,
   incrementSortCount,
   loadSeasonalItems,
   loadUnionItems,
@@ -88,9 +91,9 @@ export interface ShiftResult {
   lessons: string[];
   score: number;
   cashEarned: number;
-  xpEarned: number;
-  level: number;
-  leveledUp: boolean;
+  streakBonus: number;
+  cashBefore: number;
+  starsBefore: number;
   sawRare: boolean;
   newBest?: boolean;
 }
@@ -108,8 +111,8 @@ const SHIFT_ITEMS = 20;
 const CHEV_GAP = 44;
 const ENDLESS_LIVES = 3;
 
-// DEBUG: spawn only bottles (skip the full game loop when testing the modal)
-const DEBUG_BOTTLE_ONLY = false;
+// DEBUG: spawn only Portland items (skip the full game loop when testing Portland)
+const DEBUG_PORTLAND_ONLY = true;
 
 // work area: sink top-left, a row of 4 rack slots below it, prep tray
 // right (3:4); the tray doubles as the bottle prep drop zone
@@ -130,6 +133,7 @@ const zoneStyle = (r: { x: number; y: number; w: number; h: number }) => ({
 });
 
 const SINK_IMG = require("../../assets/extra/sink.png");
+const SINK_ON_IMG = require("../../assets/extra/sink-on.png");
 const TRAY_IMG = require("../../assets/extra/prep-tray.png");
 const TABLE_IMG = require("../../assets/extra/table.png");
 const PORTLAND_BG = require("../../assets/background/portland-bg.png");
@@ -371,8 +375,6 @@ export function BeltScreen({
   const poolRef = useRef<GameItem[]>([]);
   const lastDrawRef = useRef(-1);
   const dangerKeysRef = useRef<Set<number>>(new Set());
-  const twistEncounters = useRef(0);
-  const peelEncounters = useRef(0);
   const lessonsRef = useRef(new Map<string, string>());
   const endedRef = useRef(false);
   const seasonRef = useRef<{ def: SeasonDef; items: GameItem[] } | null>(null);
@@ -451,10 +453,13 @@ export function BeltScreen({
   }, [regionKey]);
 
   // random draw from the spawnable pool (complex items only once their
-  // mechanic exists; the bottle's twist-peel does)
+  // mechanic exists; the bottle's twist-peel and the cup's lid-sleeve do)
   const drawFromPool = (p: GameItem[]): GameItem => {
     const spawnable = p.filter(
-      (it) => !it.complex || it.mechanic === "twist-peel",
+      (it) =>
+        !it.complex ||
+        it.mechanic === "twist-peel" ||
+        it.mechanic === "lid-sleeve",
     );
     let i = Math.floor(Math.random() * spawnable.length);
     if (i === lastDrawRef.current) i = (i + 1) % spawnable.length;
@@ -475,25 +480,27 @@ export function BeltScreen({
 
   const buildQueue = (p: GameItem[], n: number): GameItem[] => {
     const q: GameItem[] = [];
-    const bottle = p.find((it) => it.id === "bottle");
-    const bottleRed = p.find((it) => it.id === "bottle-red");
-    if (DEBUG_BOTTLE_ONLY && bottle && bottleRed) {
-      for (let i = 0; i < n; i++) q.push(i % 2 === 0 ? bottle : bottleRed);
+    const portland = p.filter((it) => it.region === "portland");
+    if (DEBUG_PORTLAND_ONLY && portland.length > 0) {
+      for (let i = 0; i < n; i++) q.push(portland[i % portland.length]);
       return q;
     }
+    const bottle = p.find((it) => it.id === "bottle");
     for (let i = 0; i < n; i++) {
       q.push(bottle && (i === 5 || i === 13) ? bottle : drawOne());
     }
     return q;
   };
 
-  // fresh queue per run, once the pool is loaded
+  // fresh queue per run, once the pool is loaded (also rebuilds live when
+  // the debug flag is toggled, so you don't need a new shift to test it)
   useEffect(() => {
     if (!pool) return;
     sawRareRef.current = false;
     streakMilestonesRef.current = new Set();
     queueRef.current = buildQueue(pool, SHIFT_ITEMS);
-  }, [runId, pool]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [runId, pool, DEBUG_PORTLAND_ONLY]);
 
   // spawner (dead while the belt is paused for learning; refills in endless)
   useEffect(() => {
@@ -526,32 +533,28 @@ export function BeltScreen({
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       const accuracy = resolved > 0 ? correct / resolved : 0;
       const stars = starsForAccuracy(correct, resolved);
+      // pre-shift totals for the summary reward flight (db not yet updated)
+      const cashBefore = getCash();
+      const starsBefore = getTotalStars();
       // cash: $20 base (50%+ accuracy only) + $2/correct + streak bonuses
       const baseCash = accuracy >= 0.5 ? 20 : 0;
       const sortCash = correct * 2;
       const milestones = streakMilestonesRef.current;
       let streakCash = 0;
-      let streakXP = 0;
       if (milestones.has(5)) {
         streakCash += 5;
-        streakXP += 5;
       }
       if (milestones.has(10)) {
         streakCash += 8;
-        streakXP += 5;
       }
       if (milestones.has(15)) {
         streakCash += 10;
-        streakXP += 5;
       }
       if (milestones.has(20)) {
         streakCash += 15;
-        streakXP += 15;
       }
       const totalCash = baseCash + sortCash + streakCash;
-      const totalXP = correct * 10 + streakXP;
       const newCash = addCash(totalCash);
-      const { level, leveledUp } = addXP(totalXP);
       onShiftEndRef.current({
         correct,
         total: resolved,
@@ -562,9 +565,9 @@ export function BeltScreen({
         score: correct,
         sawRare: sawRareRef.current,
         cashEarned: totalCash,
-        xpEarned: totalXP,
-        level,
-        leveledUp,
+        streakBonus: streakCash,
+        cashBefore,
+        starsBefore,
       });
     }, 700);
     return () => clearTimeout(t);
@@ -602,7 +605,7 @@ export function BeltScreen({
     const right = BINS.find((b) => b.id === def.bin)!;
     if (def.teaching && !lessonsRef.current.has(def.id)) {
       lessonsRef.current.set(def.id, def.teaching);
-      setHint(`Lesson: ${def.teaching} → ${right.label}`);
+      setHint(`💡 ${def.teaching} → ${right.label}`);
     } else {
       setHint(`${def.name} → ${right.label}`);
     }
@@ -668,15 +671,14 @@ export function BeltScreen({
   const handlePrep = (key: number, def: GameItem, x: number, y: number) => {
     setItems((prev) => prev.filter((i) => i.key !== key));
     clearDanger(key);
-    const paused = twistEncounters.current < 2 || peelEncounters.current < 2;
-    twistEncounters.current += 1;
-    peelEncounters.current += 1;
+    const paused = !endless;
     setModal({ x, y, paused, item: def });
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
   };
 
   const handleModalClose = (allCorrect: boolean) => {
     const m = modal;
+    if (!m) return;
     setModal(null);
     if (allCorrect) {
       if (m) {
@@ -723,6 +725,7 @@ export function BeltScreen({
     };
     setSinkItems((prev) => pumpSink([...prev, item]));
     setHint(null);
+    playSinkDrop();
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
   };
 
@@ -817,19 +820,7 @@ export function BeltScreen({
     "portland",
   );
 
-  // "PORTLAND — MON" -> "Monday Shift"; "ENDLESS" stays as-is
-  const titleParts = title.split(" — ");
-  const DAY_FULL: Record<string, string> = {
-    MON: "Monday",
-    TUE: "Tuesday",
-    WED: "Wednesday",
-    THU: "Thursday",
-    FRI: "Friday",
-  };
-  const shiftDayLabel =
-    titleParts.length === 2
-      ? `${DAY_FULL[titleParts[1]] ?? titleParts[1]} Shift`
-      : titleParts[0];
+  // title is "Day N" (global shift count) or "ENDLESS" — rendered as-is
 
   if (!pool) {
     return (
@@ -881,7 +872,7 @@ export function BeltScreen({
             numberOfLines={1}
             adjustsFontSizeToFit
           >
-            {shiftDayLabel}
+            {title}
           </Text>
         </View>
         <View style={[styles.paperPill, styles.statPill, styles.sortedPill]}>
@@ -917,9 +908,14 @@ export function BeltScreen({
         </View>
       </View>
       {(hint || waitingOnSink) && (
-        <Text style={styles.hint}>
-          {hint ?? "Finish the rinse — drag clean items to their bins"}
-        </Text>
+        <Animated.View
+          entering={FadeIn.duration(200).springify()}
+          style={styles.hintWrap}
+        >
+          <Text style={styles.hint} numberOfLines={4} adjustsFontSizeToFit>
+            {hint ?? "Finish the rinse — drag clean items to their bins"}
+          </Text>
+        </Animated.View>
       )}
 
       {/* table texture below the belt's visual bottom (belt.png has transparent padding; visual content ends at ~462pt) */}
@@ -960,7 +956,7 @@ export function BeltScreen({
 
       {/* work area art backdrops (sink + prep tray) */}
       <Image
-        source={SINK_IMG}
+        source={sinkItems.length > 0 ? SINK_ON_IMG : SINK_IMG}
         style={[zoneStyle(SINK_RECT), styles.artShadow]}
         resizeMode="contain"
       />
@@ -1000,7 +996,7 @@ export function BeltScreen({
       />
 
       {/* rack slots render on the drying-rack section */}
-      {[0, 1, 2, 3].map((i) => (
+      {Array.from({ length: RACK_CAP }).map((_, i) => (
         <RackSlot
           key={i}
           item={rackItems[i] ?? null}
@@ -1028,18 +1024,29 @@ export function BeltScreen({
         <Burst key={bb.id} x={bb.x} y={bb.y} />
       ))}
 
-      {/* disassembly modal */}
-      {modal && (
-        <DisassemblyModal
-          origin={{ x: modal.x, y: modal.y }}
-          paused={modal.paused}
-          ticker={queueRef.current.slice(0, 3)}
-          danger={danger}
-          parts={modal.item.parts ?? []}
-          itemId={modal.item.id}
-          onClose={handleModalClose}
-        />
-      )}
+      {/* disassembly modal (coffee cup gets its own lid-sleeve modal) */}
+      {modal &&
+        (modal.item.mechanic === "lid-sleeve" ? (
+          <CoffeeCupModal
+            origin={{ x: modal.x, y: modal.y }}
+            paused={modal.paused}
+            ticker={queueRef.current.slice(0, 3)}
+            danger={danger}
+            parts={modal.item.parts ?? []}
+            itemId={modal.item.id}
+            onClose={handleModalClose}
+          />
+        ) : (
+          <DisassemblyModal
+            origin={{ x: modal.x, y: modal.y }}
+            paused={modal.paused}
+            ticker={queueRef.current.slice(0, 3)}
+            danger={danger}
+            parts={modal.item.parts ?? []}
+            itemId={modal.item.id}
+            onClose={handleModalClose}
+          />
+        ))}
 
       {/* user pause overlay */}
       {userPaused && (
@@ -1098,7 +1105,6 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: 5,
-    marginBottom: 8,
   },
   paperPill: {
     backgroundColor: palette.cream,
@@ -1113,7 +1119,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     height: 32,
   },
-  seasonIcon: { width: 22, height: 22, marginRight: 8 },
+  seasonIcon: { width: 21, height: 21, marginRight: 8 },
   shiftTitle: {
     fontSize: 14,
     fontWeight: "600",
@@ -1168,14 +1174,23 @@ const styles = StyleSheet.create({
     width: 180,
     height: 180,
   },
+  hintWrap: {
+    position: "absolute",
+    top: 185,
+    left: 115,
+    right: 115,
+    height: 120,
+    justifyContent: "center",
+    alignItems: "center",
+    backgroundColor: "rgba(74, 63, 53, 0.65)",
+    borderRadius: 5,
+    paddingHorizontal: 16,
+  },
   hint: {
     textAlign: "center",
-    marginTop: 10,
     fontSize: 14,
     fontWeight: "600",
-    color: "#B3541E",
-    paddingHorizontal: 40,
-    minHeight: 20,
+    color: "#FFF",
   },
   belt: {
     position: "absolute",

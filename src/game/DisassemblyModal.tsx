@@ -1,5 +1,6 @@
 import * as Haptics from "expo-haptics";
-import { useEffect, useRef, useState } from "react";
+import { playCorrect, playWrong } from "../audio/sounds";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Image, StyleSheet, Text, View } from "react-native";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import Animated, {
@@ -191,34 +192,30 @@ export function DisassemblyModal({
 
   const chipSorted = (id: PartId, x: number, y: number) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    playCorrect();
     const bid = ++burstId.current;
     setBursts((b) => [...b, { id: bid, x, y }]);
     setTimeout(() => setBursts((b) => b.filter((bb) => bb.id !== bid)), 750);
     setHint(null);
-    setSortedIds((s) => {
-      const n = [...s, id];
-      if (n.length === 3) {
-        setTimeout(() => {
-          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-          setStep("done");
-          setTimeout(() => onClose(wrongRef.current === 0), 650);
-        }, 450);
-      }
-      return n;
-    });
+    setSortedIds((s) => (s.includes(id) ? s : [...s, id]));
   };
+
+  useEffect(() => {
+    if (sortedIds.length !== 3) return;
+    const t1 = setTimeout(() => {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      setStep("done");
+      const t2 = setTimeout(() => onClose(wrongRef.current === 0), 650);
+    }, 450);
+    return () => clearTimeout(t1);
+  }, [sortedIds]);
 
   const chipWrong = (id: PartId) => {
     wrongRef.current += 1;
     setHint(PART_HINT[id]);
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
-    const t = TX[id];
-    t.tx.value = withSequence(
-      withTiming(-12, { duration: 55 }),
-      withTiming(12, { duration: 55 }),
-      withSpring(0),
-    );
-    t.ty.value = withSpring(0);
+    playWrong();
+    setSortedIds((s) => (s.includes(id) ? s : [...s, id]));
   };
 
   // ---- gestures (bin hit-test is the shared ./binHit helper) ----
@@ -291,6 +288,7 @@ export function DisassemblyModal({
     live: any,
   ) =>
     Gesture.Pan()
+      .minDistance(12)
       .onUpdate((e) => {
         if (live && !live.value) return;
         tx.value = e.translationX;
@@ -303,8 +301,18 @@ export function DisassemblyModal({
         const fy = e.absoluteY;
         const hit = hitBinPoint(binRects, fx, fy);
         if (hit === PART_BIN[id]) runOnJS(chipSorted)(id, fx, fy);
-        else runOnJS(chipWrong)(id);
+        else if (hit >= 0) runOnJS(chipWrong)(id);
+        else {
+          tx.value = withSpring(0);
+          ty.value = withSpring(0);
+        }
       });
+
+  // Gestures must be stable across re-renders (e.g. when the sink finishes
+  // and BeltScreen re-renders) — otherwise an in-progress drag gets cancelled.
+  const bodyGesture = useMemo(() => chipPan("body", bodyTx, bodyTy, 0, 0, 0, 0, bodyLive), []);
+  const capGesture = useMemo(() => chipPan("cap", capTx, capTy, 0, 0, 0, 0, null), []);
+  const wrapGesture = useMemo(() => chipPan("wrapper", wrapTx, wrapTy, 0, 0, 0, 0, null), []);
 
   const capStyle = useAnimatedStyle(() => ({
     transform: [{ translateX: capTx.value }, { translateY: capTy.value }],
@@ -329,6 +337,7 @@ export function DisassemblyModal({
         </Text>
 
         {/* belt ticker: next 3 queued items + red edge on near fall-off */}
+        {!paused && (
         <View style={styles.ticker}>
           {danger && <View style={styles.tickerDanger} />}
           <Text style={styles.tickerLabel}>ON THE BELT</Text>
@@ -354,6 +363,7 @@ export function DisassemblyModal({
             )}
           </View>
         </View>
+        )}
 
         {paused && (
           <View style={styles.pausedPill}>
@@ -381,16 +391,7 @@ export function DisassemblyModal({
         {/* bottle body (draggable once parts are off; unmounts when sorted) */}
         {!sortedIds.includes("body") && (
           <GestureDetector
-            gesture={chipPan(
-              "body",
-              bodyTx,
-              bodyTy,
-              BX - 50,
-              BY - 120,
-              250,
-              500,
-              bodyLive,
-            )}
+            gesture={bodyGesture}
           >
             <Animated.View
               style={[
@@ -457,16 +458,7 @@ export function DisassemblyModal({
         {/* parts chips */}
         {capChip && !sortedIds.includes("cap") && (
           <GestureDetector
-            gesture={chipPan(
-              "cap",
-              capTx,
-              capTy,
-              SW - 70,
-              BY - 50,
-              80,
-              60,
-              null,
-            )}
+            gesture={capGesture}
           >
             <Animated.View
               style={[
@@ -492,16 +484,7 @@ export function DisassemblyModal({
         )}
         {wrapChip && !sortedIds.includes("wrapper") && (
           <GestureDetector
-            gesture={chipPan(
-              "wrapper",
-              wrapTx,
-              wrapTy,
-              0,
-              BY + 85,
-              120,
-              131,
-              null,
-            )}
+            gesture={wrapGesture}
           >
             <Animated.View
               style={[

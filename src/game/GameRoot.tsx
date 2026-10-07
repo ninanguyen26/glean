@@ -8,7 +8,6 @@ import { SummaryScreen } from './SummaryScreen';
 import { AlbumScreen } from './AlbumScreen';
 import { BeltScreen, ShiftResult } from './BeltScreen';
 import {
-  DAY_LABELS,
   getRegionDef,
   getActiveSeason,
   bumpRarePity,
@@ -82,10 +81,13 @@ export function GameRoot() {
     case 'rules': {
       const region = getRegionDef(screen.city);
       const p = progress.cities.find((c) => c.id === screen.city)!;
+      const globalDay =
+        progress.cities.reduce((sum, c) => sum + (c.nextDay - 1), 0) + 1;
       content = (
         <RulesScreen
           region={region}
           day={p.nextDay}
+          globalDay={globalDay}
           onStart={() =>
             setScreen({ name: 'shift', city: screen.city, day: p.nextDay, key: 0 })
           }
@@ -95,8 +97,9 @@ export function GameRoot() {
       break;
     }
     case 'shift': {
-      const region = getRegionDef(screen.city);
-      const title = `${region.name.toUpperCase()} \u2014 ${DAY_LABELS[screen.day - 1]}`;
+      const globalDay =
+        progress.cities.reduce((sum, c) => sum + (c.nextDay - 1), 0) + 1;
+      const title = `Day ${globalDay}`;
       content = (
         <BeltScreen
           key={`shift-${screen.city}-${screen.day}-${screen.key}`}

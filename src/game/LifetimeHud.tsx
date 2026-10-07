@@ -1,30 +1,69 @@
 import { Image, StyleSheet, Text, View } from "react-native";
+import { useEffect } from "react";
+import Animated, {
+  useAnimatedStyle,
+  useSharedValue,
+  withSequence,
+  withTiming,
+} from "react-native-reanimated";
 import { palette } from "../constants/theme";
-import { getCash, getLevel, getTotalStars } from "./db";
+import { getCash, getTotalStars } from "./db";
 import { ICON_COIN, ICON_STAR } from "./sprites";
 
-/* Top row: lifetime numbers (Lv / cash / total stars). Paper-tag pills,
- * identical on Home, Rules, and Belt. Values shrink to fit when long. */
-export function LifetimeHud() {
+/* Top row: lifetime numbers (cash / total stars). Paper-tag pills,
+ * identical on Home, Rules, and Belt. Values shrink to fit when long.
+ * cashOverride/starsOverride pin the display (summary reward flight
+ * starts at the pre-shift totals); cashPulse/starsPulse pop the pill
+ * when incremented. */
+export function LifetimeHud({
+  cashOverride,
+  starsOverride,
+  cashPulse,
+  starsPulse,
+}: {
+  cashOverride?: number;
+  starsOverride?: number;
+  cashPulse?: number;
+  starsPulse?: number;
+}) {
+  const cashScale = useSharedValue(1);
+  const starsScale = useSharedValue(1);
+  useEffect(() => {
+    if (cashPulse) {
+      cashScale.value = withSequence(
+        withTiming(1.18, { duration: 110 }),
+        withTiming(1, { duration: 170 })
+      );
+    }
+  }, [cashPulse]);
+  useEffect(() => {
+    if (starsPulse) {
+      starsScale.value = withSequence(
+        withTiming(1.18, { duration: 110 }),
+        withTiming(1, { duration: 170 })
+      );
+    }
+  }, [starsPulse]);
+  const cashAnim = useAnimatedStyle(() => ({
+    transform: [{ scale: cashScale.value }],
+  }));
+  const starsAnim = useAnimatedStyle(() => ({
+    transform: [{ scale: starsScale.value }],
+  }));
   return (
     <View style={styles.row}>
-      <View style={[styles.levelPill, styles.pillCenter]}>
-        <Text style={[styles.levelText]} numberOfLines={1} adjustsFontSizeToFit>
-          Lv {getLevel()}
-        </Text>
-      </View>
-      <View style={styles.pill}>
+      <Animated.View style={[styles.pill, cashAnim]}>
         <Image source={ICON_COIN} style={styles.icon} resizeMode="contain" />
         <Text style={styles.text} numberOfLines={1} adjustsFontSizeToFit>
-          {getCash()}
+          {cashOverride ?? getCash()}
         </Text>
-      </View>
-      <View style={styles.pill}>
+      </Animated.View>
+      <Animated.View style={[styles.pill, starsAnim]}>
         <Image source={ICON_STAR} style={styles.icon} resizeMode="contain" />
         <Text style={styles.text} numberOfLines={1} adjustsFontSizeToFit>
-          {getTotalStars()}
+          {starsOverride ?? getTotalStars()}
         </Text>
-      </View>
+      </Animated.View>
     </View>
   );
 }
@@ -34,22 +73,6 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     justifyContent: "center",
     gap: 5,
-  },
-  levelPill: {
-    flexDirection: "column",
-    alignItems: "center",
-    width: 70,
-    backgroundColor: palette.oat,
-    borderWidth: 2,
-    borderColor: palette.bark,
-    borderRadius: 14,
-    paddingHorizontal: 12,
-    paddingVertical: 2,
-  },
-  levelText: {
-    color: palette.bark,
-    fontWeight: "700",
-    fontSize: 12,
   },
   pill: {
     flexDirection: "row",
@@ -61,9 +84,6 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     paddingHorizontal: 12,
     paddingVertical: 2,
-  },
-  pillCenter: {
-    justifyContent: "center",
   },
   icon: { width: 22, height: 22 },
   text: {

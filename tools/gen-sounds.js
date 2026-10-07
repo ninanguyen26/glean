@@ -109,8 +109,143 @@ function dropWrong() {
   });
 }
 
+/* Coin ching variants — warm siblings of drop-correct, with long
+ * singing tails (slow decay; high partials ring a touch longer for
+ * a metallic coin feel). Ngoc picks a favorite; the rest stay as
+ * alternates. */
+function coinChing(variant) {
+  // dur, notes, fundamental decay, 2nd/3rd harmonic levels
+  const recipe = (dur, notes, decay = 7, h2 = 0.15, h3 = 0) =>
+    render(dur, (t) => {
+      let s = 0;
+      for (const { f, t0 } of notes) {
+        if (t >= t0) {
+          const dt = t - t0;
+          s +=
+            Math.sin(2 * Math.PI * f * dt) * 0.6 * Math.exp(-dt * decay) +
+            Math.sin(2 * Math.PI * f * 2 * dt) * h2 * Math.exp(-dt * (decay - 2)) +
+            Math.sin(2 * Math.PI * f * 3 * dt) * h3 * Math.exp(-dt * (decay - 2));
+        }
+      }
+      return s * Math.min(1, (dur - t) / 0.015);
+    });
+  if (variant === 1) {
+    // v1: happy fifth up (C6 -> G6)
+    return recipe(0.7, [
+      { f: 1046.5, t0: 0 },
+      { f: 1567.98, t0: 0.08 },
+    ]);
+  } else if (variant === 2) {
+    // v2: octave pop (G5 -> G6)
+    return recipe(0.65, [
+      { f: 783.99, t0: 0 },
+      { f: 1567.98, t0: 0.07 },
+    ]);
+  } else if (variant === 3) {
+    // v3: major triad sparkle (C6 -> E6 -> G6)
+    return recipe(0.75, [
+      { f: 1046.5, t0: 0 },
+      { f: 1318.51, t0: 0.06 },
+      { f: 1567.98, t0: 0.12 },
+    ]);
+  }
+  // v4: shimmer ching (A5 -> E6), extra harmonics for metallic coin feel
+  return recipe(
+    0.7,
+    [
+      { f: 880.0, t0: 0 },
+      { f: 1318.51, t0: 0.08 },
+    ],
+    7,
+    0.22,
+    0.1
+  );
+}
+
+/* Star tick: tiny happy blip for each star landing on the HUD. */
+function starTick() {
+  const dur = 0.35;
+  return render(dur, (t) => {
+    let s = 0;
+    for (const { f, t0 } of [
+      { f: 1567.98, t0: 0 },
+      { f: 2093.0, t0: 0.05 },
+    ]) {
+      if (t >= t0) {
+        const dt = t - t0;
+        s +=
+          (Math.sin(2 * Math.PI * f * dt) * 0.6 +
+            Math.sin(2 * Math.PI * f * 2 * dt) * 0.15) *
+          Math.exp(-dt * 9);
+      }
+    }
+    return s * Math.min(1, (dur - t) / 0.015);
+  });
+}
+
+/* Sink drop variants — item plopping into the wash basin.
+ * Ngoc picks a favorite; the rest stay as alternates. */
+function sinkPlop() {
+  // v1: classic cartoon water plop, pitch falls 600 -> 150Hz
+  const dur = 0.28;
+  return render(dur, (t) => {
+    const phase = 2 * Math.PI * (150 * t + (450 / 18) * (1 - Math.exp(-t * 18)));
+    const s = Math.sin(phase) * 0.7 * Math.exp(-t * 14);
+    return s * Math.min(1, (dur - t) / 0.01);
+  });
+}
+
+function sinkSplash() {
+  // v2: watery noise splash, lowpassed
+  const dur = 0.35;
+  const n = Math.floor(SR * dur);
+  const rand = rng(42);
+  const out = new Float64Array(n);
+  let y = 0;
+  const a = 0.22;
+  for (let i = 0; i < n; i++) {
+    const t = i / SR;
+    y += a * (rand() * 2 - 1 - y);
+    const env = Math.exp(-t * 11) * Math.min(1, t / 0.005);
+    out[i] = y * env * Math.min(1, (dur - t) / 0.015);
+  }
+  let peak = 0;
+  for (let i = 0; i < n; i++) peak = Math.max(peak, Math.abs(out[i]));
+  const g = peak > 0 ? 0.75 / peak : 1;
+  for (let i = 0; i < n; i++) out[i] *= g;
+  return out;
+}
+
+function sinkBloop() {
+  // v3: bubble bloop, pitch wobble
+  const dur = 0.32;
+  return render(dur, (t) => {
+    const phase =
+      2 * Math.PI * 300 * t +
+      (40 / 25) * (1 - Math.cos(2 * Math.PI * 25 * t)) * Math.exp(-t * 6);
+    const s =
+      (Math.sin(phase) * 0.65 + Math.sin(phase * 2) * 0.12) * Math.exp(-t * 12);
+    return s * Math.min(1, (dur - t) / 0.01);
+  });
+}
+
+function sinkPlip() {
+  // v4: short bright droplet plip, 1200 -> 700Hz
+  const dur = 0.14;
+  return render(dur, (t) => {
+    const phase = 2 * Math.PI * (700 * t + (500 / 25) * (1 - Math.exp(-t * 25)));
+    const s = Math.sin(phase) * 0.7 * Math.exp(-t * 28);
+    return s * Math.min(1, (dur - t) / 0.008);
+  });
+}
+
 fs.mkdirSync(OUT, { recursive: true });
 writeWav("tap-pop.wav", tapPop());
 writeWav("drop-correct.wav", dropCorrect());
 writeWav("drop-wrong.wav", dropWrong());
+for (let v = 1; v <= 4; v++) writeWav(`coin-ching-${v}.wav`, coinChing(v));
+writeWav("star-tick.wav", starTick());
+[sinkPlop, sinkSplash, sinkBloop, sinkPlip].forEach((fn, i) =>
+  writeWav(`sink-drop-${i + 1}.wav`, fn())
+);
 console.log("done ->", OUT);

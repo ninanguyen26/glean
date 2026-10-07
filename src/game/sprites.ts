@@ -34,13 +34,23 @@ export const ITEM_SPRITES: Record<string, any> = {
   'cracked-bucket': require('../../assets/sprites/seasonal/fall/cracked-bucket.png'),
   'dead-mums': require('../../assets/sprites/seasonal/fall/dead-mums.png'),
   'fake-web': require('../../assets/sprites/seasonal/fall/fake-web.png'),
-  'halloween-mask': require('../../assets/sprites/seasonal/fall/halloween-mask.png'),
-  'halloween-mask-1': require('../../assets/sprites/seasonal/fall/halloween-mask-1.png'),
+  'halloween-mask': require('../../assets/sprites/seasonal/fall/halloween-mask-1.png'),
+  'halloween-mask-1': require('../../assets/sprites/seasonal/fall/halloween-mask.png'),
   'mini-gourd': require('../../assets/sprites/seasonal/fall/mini-gourd.png'),
   'mini-gourd-1': require('../../assets/sprites/seasonal/fall/mini-gourd-1.png'),
   'pumpkin-guts': require('../../assets/sprites/seasonal/fall/pumpkin-guts.png'),
   'pumpkin-pie': require('../../assets/sprites/seasonal/fall/pumpkin-pie.png'),
   'turkey-bone': require('../../assets/sprites/seasonal/fall/turkey-bone.png'),
+  // portland (9 items)
+  umbrella: require('../../assets/sprites/cities/portland/umbrella.png'),
+  'rain-boot': require('../../assets/sprites/cities/portland/rain-boot.png'),
+  growler: require('../../assets/sprites/cities/portland/growler.png'),
+  'coffee-cup': require('../../assets/sprites/cities/portland/coffee-cup.png'),
+  'voodoo-box': require('../../assets/sprites/cities/portland/voodoo-box.png'),
+  'pla-container': require('../../assets/sprites/cities/portland/pla-container.png'),
+  'wet-news': require('../../assets/sprites/cities/portland/wet-news.png'),
+  'pack-rings': require('../../assets/sprites/cities/portland/pack-rings.png'),
+  'bike-tube': require('../../assets/sprites/cities/portland/bike-tube.png'),
 };
 
 export const BIN_SPRITES: Record<string, any> = {
@@ -62,6 +72,7 @@ export const ICON_START = require('../../assets/icons/start.png');
 export const ICON_RULEBOOK = require('../../assets/icons/rulebook-icon.png');
 export const ICON_COIN = require('../../assets/icons/coin-icon.png');
 export const ICON_STAR = require('../../assets/icons/star-icon.png');
+export const ICON_STAR_OUTLINE = require('../../assets/icons/star-outline.png');
 export const ICON_BACK = require('../../assets/icons/back-icon.png');
 export const ICON_PAUSE = require('../../assets/icons/pause-icon.png');
 export const ICON_STREAK = require('../../assets/icons/streak-icon.png');
@@ -71,6 +82,7 @@ export const ICON_AUTUMN = require('../../assets/icons/autumn.png');
 export const ICON_WINTER = require('../../assets/icons/winter.png');
 export const ICON_RESUME = require('../../assets/icons/resume.png');
 export const ICON_QUIT = require('../../assets/icons/quit.png');
+export const ICON_PIN = require('../../assets/icons/pin.png');
 
 // disassembly modal layers: blue bottle
 export const BOTTLE_BODY = require('../../assets/sprites/bottle-body.png');
@@ -86,4 +98,11 @@ export const RED_BOTTLE_NO_CAP = require('../../assets/sprites/bottle-no-cap-1.p
 export const RED_BOTTLE_WRAP_PEEL = require('../../assets/sprites/bottle-wrapper-1.png');
 // chips reuse the same 4 files
 export const BOTTLE_CAP_CHIP = require('../../assets/sprites/bottle-cap.png');
-export const BOTTLE_WRAP_CHIP = require('../../assets/sprites/bottle-wrapper.png'); 
+export const BOTTLE_WRAP_CHIP = require('../../assets/sprites/bottle-wrapper.png');
+// disassembly modal layers: coffee cup (lid-sleeve mechanic)
+export const COFFEE_CUP_WHOLE = require('../../assets/sprites/cities/portland/coffee-cup.png');
+export const COFFEE_CUP_BODY = require('../../assets/sprites/cities/portland/coffee-cup-body.png');
+export const COFFEE_CUP_LID = require('../../assets/sprites/cities/portland/coffee-cup-lid.png');
+export const COFFEE_CUP_SLEEVE = require('../../assets/sprites/cities/portland/coffee-cup-sleeve.png');
+export const COFFEE_CUP_NO_LID = require('../../assets/sprites/cities/portland/coffee-cup-no-lid.png');
+export const COFFEE_CUP_NO_SLEEVE = require('../../assets/sprites/cities/portland/coffee-cup-no-sleeve.png'); 

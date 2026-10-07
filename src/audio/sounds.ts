@@ -11,6 +11,9 @@ import { createAudioPlayer, setAudioModeAsync } from "expo-audio";
 const TAP_SOURCE = require("../../assets/audio/tap-pop.wav");
 const CORRECT_SOURCE = require("../../assets/audio/drop-correct.wav");
 const WRONG_SOURCE = require("../../assets/audio/drop-wrong.wav");
+const COIN_SOURCE = require("../../assets/audio/coin-ching-3.wav");
+const STAR_TICK_SOURCE = require("../../assets/audio/star-tick.wav");
+const SINK_DROP_SOURCE = require("../../assets/audio/sink-drop-4.wav");
 
 let ready = false;
 
@@ -48,4 +51,16 @@ export function playCorrect() {
 
 export function playWrong() {
   playOne(WRONG_SOURCE);
+}
+
+export function playCoin() {
+  playOne(COIN_SOURCE);
+}
+
+export function playStarTick() {
+  playOne(STAR_TICK_SOURCE);
+}
+
+export function playSinkDrop() {
+  playOne(SINK_DROP_SOURCE);
 }

@@ -17,24 +17,30 @@ import { ItemDef } from "./items";
 
 /*
  * Phase 6 (rework): one big FIFO sink. Unlimited dirty intake; items rinse
- * one at a time (~15s each) in drop order. Finished items stage on the
- * side rack (cap 4) for drag-out sorting.
+ * one at a time (~8s each, 2s per pie quadrant) in drop order. Finished items stage on the
+ * side rack (cap 3) for drag-out sorting.
  *
  * The basin owns the rinse clock so the tick never re-renders the belt
  * screen (recreating every item's gesture mid-drag).
  */
 
 export const SINK_TOP = 400;
-export const RINSE_SECS = 15;
-export const RACK_CAP = 4;
+export const RINSE_SECS = 8;
+export const RACK_CAP = 3;
 
-// work area: sink top-left, a row of 4 rack slots below it,
+// work area: sink top-left, a row of 3 rack slots below it,
 // prep tray right (3:4)
 export const ZONE = { x: 24, y: 472, w: SW - 48, h: 224 };
 const Z_GAP = 12;
 const COL_W = (ZONE.w - Z_GAP) / 2;
 const ROW_H = (ZONE.h - Z_GAP) / 2;
-export const SINK_RECT = { x: ZONE.x, y: ZONE.y, w: COL_W, h: ROW_H + 96 };
+const SINK_LIFT = 20;
+export const SINK_RECT = {
+  x: ZONE.x,
+  y: ZONE.y - SINK_LIFT,
+  w: COL_W,
+  h: ROW_H + 96,
+};
 export const TRAY_RECT = {
   x: ZONE.x + COL_W + Z_GAP,
   y: ZONE.y,
@@ -42,15 +48,15 @@ export const TRAY_RECT = {
   h: (COL_W * 4) / 3,
 };
 
-// basin sits on the sink section; the rack is a plain row of 4 slots
+// basin sits on the sink section; the rack is a plain row of 3 slots
 // below the sink (no art). basinRect is the dirty-item drop target.
 export const BASIN = { ...SINK_RECT };
-const RACK_S = 35;
+const RACK_S = 50;
 const RACK_GAP = 8;
 export const RACK = {
   x: ZONE.x + 12,
   y: SINK_RECT.y + SINK_RECT.h + Z_GAP - 8,
-  w: 4 * RACK_S + 3 * RACK_GAP,
+  w: 3 * RACK_S + 2 * RACK_GAP,
   h: RACK_S,
 };
 export const basinRect: BinRect = {
@@ -75,8 +81,11 @@ export interface SinkItem {
   status: SinkStatus;
 }
 
-/* Four-quarter pie: each quarter fills continuously as its turn comes,
-   so the pie starts moving the instant the rinse starts; green when done. */
+/* Pie timer: the circle is divided into 4 quadrants (cross dividers) and
+   each fills over 2s in order: top-right, bottom-right, bottom-left,
+   top-left. Green when done. Quadrants use explicit trig (y-down:
+   a=-90deg is 12 o'clock, increasing a sweeps clockwise) so the order
+   never depends on Skia's arc-angle convention. */
 function RinsePie({
   progress,
   size = 76,
@@ -88,27 +97,40 @@ function RinsePie({
   const r = size / 2 - 3;
   const cx = size / 2;
   const cy = size / 2;
-  const quarters = [0, 1, 2, 3]
-    .map((i) => {
-      const frac = Math.min(1, Math.max(0, progress * 4 - i));
-      if (frac <= 0) return null;
-      const p = Skia.Path.Make();
-      p.moveTo(cx, cy);
-      p.addArc(
-        { x: cx - r, y: cy - r, width: r * 2, height: r * 2 },
-        -90 + i * 90,
-        frac * 90,
-      );
-      p.close();
-      return p;
-    })
-    .filter(Boolean);
+
+  const wedge = (startDeg: number, sweepDeg: number) => {
+    const p = Skia.Path.Make();
+    p.moveTo(cx, cy);
+    const steps = Math.max(2, Math.ceil(sweepDeg / 6));
+    for (let s = 0; s <= steps; s++) {
+      const a = ((startDeg + (sweepDeg * s) / steps) * Math.PI) / 180;
+      p.lineTo(cx + r * Math.cos(a), cy + r * Math.sin(a));
+    }
+    p.close();
+    return p;
+  };
+
+  // quadrant start angles in fill order: TR, BR, BL, TL
+  const starts = [-90, 0, 90, 180];
+  const wedges: ReturnType<typeof Skia.Path.Make>[] = [];
+  for (let i = 0; i < 4; i++) {
+    const frac = Math.min(1, Math.max(0, progress * 4 - i));
+    if (frac > 0) wedges.push(wedge(starts[i], frac * 90));
+  }
+
+  const dividers = Skia.Path.Make();
+  dividers.moveTo(cx - r, cy);
+  dividers.lineTo(cx + r, cy);
+  dividers.moveTo(cx, cy - r);
+  dividers.lineTo(cx, cy + r);
+
   return (
     <Canvas style={{ width: size, height: size }}>
       <Circle cx={cx} cy={cy} r={r} color="#EFE6D2" />
-      {quarters.map((p, i) => (
-        <Path key={i} path={p!} color={done ? "#7FB069" : "#E8A13D"} />
+      {wedges.map((p, i) => (
+        <Path key={i} path={p} color={done ? palette.sage : palette.sky} />
       ))}
+      <Path path={dividers} color="#D9C9AC" style="stroke" strokeWidth={1.5} />
     </Canvas>
   );
 }
@@ -255,7 +277,7 @@ export function RackSlot({
       {item ? (
         <GestureDetector gesture={pan}>
           <Animated.View style={[styles.rackInner, dragStyle]}>
-            <ItemGlyph def={item.def} size={30} />
+            <ItemGlyph def={item.def} size={42} />
           </Animated.View>
         </GestureDetector>
       ) : (
@@ -268,26 +290,28 @@ export function RackSlot({
 const styles = StyleSheet.create({
   basin: {
     position: "absolute",
-    flexDirection: "row",
+    justifyContent: "center",
     alignItems: "center",
-    paddingLeft: 12,
   },
   rinsing: {
     width: 80,
     height: 80,
     justifyContent: "center",
     alignItems: "center",
+    marginTop: 36,
   },
   glyph: {
     position: "absolute",
   },
   queue: {
-    flex: 1,
+    position: "absolute",
+    bottom: 10,
+    left: 12,
+    right: 12,
     flexDirection: "row",
     flexWrap: "wrap",
     alignItems: "center",
-    paddingRight: 109,
-    marginTop: 10,
+    justifyContent: "center",
     gap: 2,
   },
   qGlyph: {
@@ -299,7 +323,7 @@ const styles = StyleSheet.create({
   qMore: {
     fontSize: 13,
     fontWeight: "800",
-    color: "#7FA3B8",
+    color: palette.river,
     marginLeft: 3,
   },
   doneCheck: {
@@ -308,7 +332,7 @@ const styles = StyleSheet.create({
     bottom: -2,
     fontSize: 14,
     fontWeight: "900",
-    color: "#7FB069",
+    color: palette.sage,
     backgroundColor: "#fff",
     borderRadius: 8,
     overflow: "hidden",
@@ -333,5 +357,10 @@ const styles = StyleSheet.create({
     height: "100%",
     justifyContent: "center",
     alignItems: "center",
+    borderRadius: 14,
+    borderWidth: 2,
+    borderStyle: "dashed",
+    borderColor: palette.bark,
+    backgroundColor: palette.sage,
   },
 });

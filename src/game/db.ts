@@ -12,7 +12,7 @@ declare const require: any;
 
 const SEED: GameItem[] = require('../../data/seed/items.json').items;
 const REGION_SEED: RegionDef[] = require('../../data/seed/regions.json').regions;
-const DB_VERSION = 8;
+const DB_VERSION = 12;
 
 export interface SeasonItemSeed {
   id: string;
@@ -465,7 +465,7 @@ export function drawSeasonal(items: GameItem[], seasonId: string): GameItem {
 
 /* ---------------- player progression ---------------- */
 
-const memProfile = { cash: 0, xp: 0 };
+const memProfile = { cash: 0 };
 
 export function getCash(): number {
   const db = openDb();
@@ -473,20 +473,6 @@ export function getCash(): number {
   ensureSeeded(db);
   const row: any = db.getFirstSync('SELECT cash FROM player_profile WHERE id = 1');
   return row ? row.cash : 0;
-}
-
-export function getXP(): number {
-  const db = openDb();
-  if (!db) return memProfile.xp;
-  ensureSeeded(db);
-  const row: any = db.getFirstSync('SELECT xp FROM player_profile WHERE id = 1');
-  return row ? row.xp : 0;
-}
-
-/** Level from cumulative XP: flat 1000 XP per level (L1 0-999, L2 1000-1999, ...). */
-export function getLevel(xp?: number): number {
-  const total = xp ?? getXP();
-  return Math.floor(total / 1000) + 1;
 }
 
 export function addCash(n: number): number {
@@ -498,20 +484,6 @@ export function addCash(n: number): number {
   ensureSeeded(db);
   db.runSync('UPDATE player_profile SET cash = cash + ? WHERE id = 1', [n]);
   return getCash();
-}
-
-export function addXP(n: number): { xp: number; level: number; leveledUp: boolean } {
-  const oldLevel = getLevel();
-  const db = openDb();
-  if (!db) {
-    memProfile.xp += n;
-  } else {
-    ensureSeeded(db);
-    db.runSync('UPDATE player_profile SET xp = xp + ? WHERE id = 1', [n]);
-  }
-  const xp = getXP();
-  const level = getLevel(xp);
-  return { xp, level, leveledUp: level > oldLevel };
 }
 
 /** Stars from accuracy: 90%+ = 3, 70%+ = 2, 50%+ = 1, else 0. */

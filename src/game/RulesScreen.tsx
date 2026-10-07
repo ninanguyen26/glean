@@ -3,6 +3,7 @@ import {
   Image,
   ImageBackground,
   Pressable,
+  ScrollView,
   StyleSheet,
   Text,
   View,
@@ -17,15 +18,20 @@ import Animated, {
 import { playTap } from "../audio/sounds";
 import { palette } from "../constants/theme";
 import { C } from "../spike/effects";
-import { DAY_LABELS } from "./db";
+import { getActiveSeason } from "./db";
 import { tapFeedback } from "./feel";
 import { BINS, RegionDef } from "./items";
 import { LifetimeHud } from "./LifetimeHud";
 import {
   BIN_SPRITES,
+  ICON_AUTUMN,
   ICON_BACK,
+  ICON_PIN,
   ICON_RULEBOOK,
+  ICON_SPRING,
   ICON_START,
+  ICON_SUMMER,
+  ICON_WINTER,
   PORTLAND_BG,
 } from "./sprites";
 
@@ -46,11 +52,13 @@ const HOUSE_RULES = [
 export function RulesScreen({
   region,
   day,
+  globalDay,
   onStart,
   onBack,
 }: {
   region: RegionDef;
   day: number;
+  globalDay: number;
   onStart: () => void;
   onBack: () => void;
 }) {
@@ -70,83 +78,118 @@ export function RulesScreen({
     transform: [{ scale: scale.value }],
   }));
 
+  const activeSeason = getActiveSeason();
+  const seasonIcon = activeSeason
+    ? {
+        spring: ICON_SPRING,
+        summer: ICON_SUMMER,
+        fall: ICON_AUTUMN,
+        winter: ICON_WINTER,
+      }[activeSeason.id]
+    : null;
+
   const body = (
     <>
-      <View style={styles.topRow}>
-        <Pressable onPress={onBack} style={styles.back} hitSlop={10}>
-          <Image
-            source={ICON_BACK}
-            style={styles.backIcon}
-            resizeMode="contain"
-          />
-        </Pressable>
-        <View style={styles.lifetimeHud}>
-          <LifetimeHud />
+      <View>
+        <View style={styles.topRow}>
+          <View style={styles.lifetimeHud}>
+            <LifetimeHud />
+          </View>
+          <Pressable onPress={onBack} style={styles.back} hitSlop={10}>
+            <Image
+              source={ICON_BACK}
+              style={styles.backIcon}
+              resizeMode="contain"
+            />
+          </Pressable>
+        </View>
+        <View style={styles.pillRow}>
+          <View style={styles.paperPill}>
+            {seasonIcon && (
+              <Image
+                source={seasonIcon}
+                style={styles.pillIcon}
+                resizeMode="contain"
+              />
+            )}
+            <Text style={styles.pillText}>Day {globalDay}</Text>
+          </View>
+          <View style={styles.paperPill}>
+            <Image
+              source={ICON_PIN}
+              style={styles.pillIcon}
+              resizeMode="contain"
+            />
+            <Text style={styles.pillText}>{region.name.toUpperCase()}</Text>
+          </View>
         </View>
       </View>
-      <Text style={styles.kicker}>{DAY_LABELS[day - 1]} SHIFT</Text>
-      <Text style={styles.city}>{region.name}</Text>
-      <Text style={styles.blurb}>{region.blurb}</Text>
-
-      <View style={styles.card}>
-        <View style={styles.sectionPill}>
-          <Text style={styles.sectionPillText}>WHAT GOES WHERE</Text>
-        </View>
-        {region.streams.map((s, i) => {
-          const b = BINS.find((x) => x.id === s)!;
-          return (
-            <View key={s}>
-              <View style={styles.streamRow}>
-                <View style={styles.binBadge}>
-                  <Image
-                    source={BIN_SPRITES[s]}
-                    style={styles.binImage}
-                    resizeMode="contain"
-                  />
-                </View>
-                <View style={styles.streamText}>
-                  <Text style={styles.streamName}>{b.label}</Text>
-                  <Text style={styles.streamItems}>{STREAM_ITEMS[s]}</Text>
-                </View>
-              </View>
-              {i < region.streams.length - 1 ? (
-                <View style={styles.divider} />
-              ) : null}
+      <View style={styles.bottomGroup}>
+        <View style={styles.card}>
+          <ScrollView
+            style={styles.cardScroll}
+            showsVerticalScrollIndicator={false}
+          >
+            <View style={styles.sectionPill}>
+              <Text style={styles.sectionPillText}>WHAT GOES WHERE</Text>
             </View>
-          );
-        })}
-        <View style={styles.divider} />
-        <View style={styles.rulesHeader}>
-          <Image
-            source={ICON_RULEBOOK}
-            style={styles.rulebookIcon}
-            resizeMode="contain"
-          />
-          <Text style={styles.rulesTitle}>House Rules</Text>
+            {region.streams.map((s, i) => {
+              const b = BINS.find((x) => x.id === s)!;
+              return (
+                <View key={s}>
+                  <View style={styles.streamRow}>
+                    <View style={styles.binBadge}>
+                      <Image
+                        source={BIN_SPRITES[s]}
+                        style={styles.binImage}
+                        resizeMode="contain"
+                      />
+                    </View>
+                    <View style={styles.streamText}>
+                      <Text style={styles.streamName}>{b.label}</Text>
+                      <Text style={styles.streamItems}>{STREAM_ITEMS[s]}</Text>
+                    </View>
+                  </View>
+                  {i < region.streams.length - 1 ? (
+                    <View style={styles.divider} />
+                  ) : null}
+                </View>
+              );
+            })}
+            <View style={styles.divider} />
+            <View style={styles.rulesHeader}>
+              <Image
+                source={ICON_RULEBOOK}
+                style={styles.rulebookIcon}
+                resizeMode="contain"
+              />
+              <Text style={styles.rulesTitle}>House Rules</Text>
+            </View>
+            {HOUSE_RULES.map((r, i) => (
+              <Text key={i} style={styles.rule}>
+                • {r}
+              </Text>
+            ))}
+          </ScrollView>
         </View>
-        {HOUSE_RULES.map((r, i) => (
-          <Text key={i} style={styles.rule}>
-            • {r}
-          </Text>
-        ))}
-      </View>
 
-      <Pressable
-        onPress={() => {
-          tapFeedback();
-          playTap();
-          onStart();
-        }}
-        style={styles.start}
-      >
-        <Animated.View style={startStyle}>
-          <Image
-            source={ICON_START}
-            style={styles.startIcon}
-            resizeMode="contain"
-          />
-        </Animated.View>
-      </Pressable>
+        <Pressable
+          onPress={() => {
+            tapFeedback();
+            playTap();
+            onStart();
+          }}
+          style={styles.start}
+        >
+          <Animated.View style={startStyle}>
+            <Image
+              source={ICON_START}
+              style={styles.startIcon}
+              resizeMode="contain"
+            />
+          </Animated.View>
+        </Pressable>
+      </View>
     </>
   );
   if (region.id === "portland") {
@@ -164,12 +207,22 @@ export function RulesScreen({
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1, paddingTop: 60, paddingHorizontal: 32 },
+  root: {
+    flex: 1,
+    paddingTop: 60,
+    paddingHorizontal: 32,
+  },
+  bottomGroup: {
+    position: "absolute",
+    left: 32,
+    right: 32,
+    bottom: 0,
+  },
   topRow: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    marginBottom: 14,
+    marginBottom: 2,
   },
   lifetimeHud: {
     height: 36,
@@ -177,20 +230,42 @@ const styles = StyleSheet.create({
   },
   back: { padding: 4 },
   backIcon: { width: 42, height: 42 },
-  kicker: { fontSize: 13, fontWeight: "700", letterSpacing: 3, color: C.sub },
-  city: { fontSize: 38, fontWeight: "900", color: C.ink, marginTop: 4 },
-  blurb: { fontSize: 15, color: C.sub, fontStyle: "italic", marginTop: 6 },
+  pillRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+  },
+  paperPill: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: palette.oat,
+    borderWidth: 2,
+    borderColor: palette.bark,
+    borderRadius: 14,
+    paddingHorizontal: 12,
+    paddingVertical: 5,
+    height: 32,
+  },
+  pillIcon: { width: 21, height: 21, marginRight: 8 },
+  pillText: {
+    fontSize: 14,
+    fontWeight: "600",
+    color: palette.bark,
+  },
   card: {
     backgroundColor: palette.paper,
     borderRadius: 20,
     borderWidth: 3,
     borderColor: palette.bark,
     padding: 20,
-    marginTop: 26,
+    height: 530,
     shadowColor: "#000",
     shadowOpacity: 0.08,
     shadowRadius: 10,
     shadowOffset: { width: 0, height: 4 },
+  },
+  cardScroll: {
+    flex: 1,
   },
   sectionPill: {
     alignSelf: "flex-start",
@@ -258,7 +333,7 @@ const styles = StyleSheet.create({
   },
   start: {
     alignItems: "center",
-    marginTop: -20,
+    bottom: 30,
   },
   startIcon: { width: 400, height: 160 },
 });
