@@ -1,7 +1,8 @@
 import React from 'react';
-import { View, Text, StyleSheet, Pressable } from 'react-native';
+import { View, Text, StyleSheet, Pressable, ImageBackground } from 'react-native';
 import { C } from '../spike/effects';
 import { getAllRegions, getActiveSeason, ProgressSnapshot } from './db';
+import { HOME_BG } from './sprites';
 
 /* Phase 6: world map — city cards with stars, locks, workweek dots, endless. */
 
@@ -19,7 +20,7 @@ export function MapScreen({
   const regions = getAllRegions();
   const season = getActiveSeason();
   return (
-    <View style={styles.root}>
+    <ImageBackground source={HOME_BG} style={styles.root} resizeMode="cover">
       <Text style={styles.title}>GLEAN</Text>
       <Text style={styles.sub}>{progress.totalStars} ★ earned</Text>
 
@@ -73,12 +74,12 @@ export function MapScreen({
             : "Finish Portland's week to unlock"}
         </Text>
       </Pressable>
-    </View>
+    </ImageBackground>
   );
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: C.bg, paddingTop: 72, paddingHorizontal: 28 },
+  root: { flex: 1, paddingTop: 72, paddingHorizontal: 28 },
   title: { fontSize: 34, fontWeight: '900', letterSpacing: 8, color: C.ink, textAlign: 'center' },
   sub: { textAlign: 'center', fontSize: 14, color: C.sub, marginTop: 6, marginBottom: 16, fontWeight: '600' },
   seasonBanner: {

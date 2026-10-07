@@ -1,12 +1,3 @@
-/**
- * Below are the colors that are used in the app. The colors are defined in the light and dark mode.
- * There are many other ways to style your app. For example, [Nativewind](https://www.nativewind.dev/), [Tamagui](https://tamagui.dev/), [unistyles](https://reactnativeunistyles.vercel.app), etc.
- */
-
-import '@/global.css';
-
-import { Platform } from 'react-native';
-
 export const Colors = {
   light: {
     text: '#000000',
@@ -22,44 +13,61 @@ export const Colors = {
     backgroundSelected: '#2E3135',
     textSecondary: '#B0B4BA',
   },
-} as const;
+};
 
-export type ThemeColor = keyof typeof Colors.light & keyof typeof Colors.dark;
+export type ThemeColor = keyof typeof Colors.light;
 
-export const Fonts = Platform.select({
-  ios: {
-    /** iOS `UIFontDescriptorSystemDesignDefault` */
-    sans: 'system-ui',
-    /** iOS `UIFontDescriptorSystemDesignSerif` */
-    serif: 'ui-serif',
-    /** iOS `UIFontDescriptorSystemDesignRounded` */
-    rounded: 'ui-rounded',
-    /** iOS `UIFontDescriptorSystemDesignMonospaced` */
-    mono: 'ui-monospace',
-  },
-  default: {
-    sans: 'normal',
-    serif: 'serif',
-    rounded: 'normal',
-    mono: 'monospace',
-  },
-  web: {
-    sans: 'var(--font-display)',
-    serif: 'var(--font-serif)',
-    rounded: 'var(--font-rounded)',
-    mono: 'var(--font-mono)',
-  },
-});
+export const Fonts = {
+  mono: 'BalsamiqSans_400Regular',
+  sans: 'System',
+};
 
 export const Spacing = {
-  half: 2,
   one: 4,
   two: 8,
-  three: 16,
-  four: 24,
-  five: 32,
-  six: 64,
-} as const;
+  three: 12,
+  four: 16,
+  five: 20,
+  six: 24,
+};
 
-export const BottomTabInset = Platform.select({ ios: 50, android: 80 }) ?? 0;
-export const MaxContentWidth = 800;
+/* Glean palette — extracted from the icon set (album/map/play/start) */
+export const palette = {
+  outline: '#6E1E1E',    // dark red-brown outline
+  sage: '#93B192',       // play/start button green
+  cream: '#FFF6E5',      // play triangle, text, pages
+  gold: '#E8A13D',       // book accents, stars
+  sky: '#8EC9DE',        // map river, photo sky
+  leaf: '#9DBE8C',       // map land, photo hills
+  sand: '#F2E3C2',       // map paper
+  clay: '#C96F4A',       // book cover, map pin
+  bark: '#4A3F35',       // dark brown text
+  fog: '#8A7B68',        // muted brown text
+  paper: '#FAF3E8',      // warm background
+  parchment: '#FCF3DC', // album modal card
+  cocoa: '#6B3E2A',      // album modal border
+  butter: '#F7E9C9',     // album title pill
+  oat: '#F8ECD2',        // album tile
+  milk: '#FFFDF8',       // near-white text on dark
+  scrim: 'rgba(46,36,28,0.6)',   // modal backdrop dim
+  faint: 'rgba(74,63,53,0.28)',  // soft outline
+  river: '#5B9BD5',      // uncommon rarity
+};
+
+export const fontSize = {
+  xs: 11,
+  sm: 13,
+  md: 15,
+  lg: 17,
+  xl: 20,
+  xxl: 30,
+  hero: 38,
+};
+
+export const fontWeight = {
+  regular: '400' as const,
+  semibold: '600' as const,
+  bold: '700' as const,
+  heavy: '800' as const,
+  black: '900' as const,
+};

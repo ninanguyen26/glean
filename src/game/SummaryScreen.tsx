@@ -33,6 +33,8 @@ export function SummaryScreen({
             <Text style={styles.line}>Accuracy  {Math.round(accuracy * 100)}%</Text>
             <Text style={styles.line}>Best streak  ×{result.bestStreak}</Text>
             <Text style={styles.line}>Missed  {result.missed}</Text>
+            <Text style={styles.line}>Earned  ${result.cashEarned}  ·  +{result.xpEarned} XP</Text>
+            <Text style={styles.line}>Level  {result.level}{result.leveledUp ? '  ↑ LEVEL UP!' : ''}</Text>
           </>
         )}
         {!region && <Text style={styles.line}>Best streak  ×{result.bestStreak}</Text>}

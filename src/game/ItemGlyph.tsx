@@ -1,13 +1,15 @@
 import React from 'react';
 import { View, Image } from 'react-native';
 import { C } from '../spike/effects';
+import { palette } from '../constants/theme';
 import { ItemDef } from './items';
 import { ITEM_SPRITES } from './sprites';
 
 /*
  * Phase 8: items with a production sprite render the PNG; everything else
- * keeps the code-drawn placeholder shape. silhouette=true forces the
- * shape path (album undiscovered state) so the sprite stays a mystery.
+ * keeps the code-drawn placeholder shape. silhouette=true (album
+ * undiscovered state) renders the item's own shape as a dark silhouette —
+ * the real sprite tinted dark when one exists, else a dark shape.
  */
 export function ItemGlyph({
   def,
@@ -18,14 +20,24 @@ export function ItemGlyph({
   size?: number;
   silhouette?: boolean;
 }) {
-  const sprite = !silhouette ? ITEM_SPRITES[def.id] : undefined;
+  const sprite = ITEM_SPRITES[def.id];
   if (sprite) {
-    return <Image source={sprite} style={{ width: size, height: size }} resizeMode="contain" />;
+    return (
+      <Image
+        source={sprite}
+        style={{
+          width: size,
+          height: size,
+          ...(silhouette ? { tintColor: palette.bark } : {}),
+        }}
+        resizeMode="contain"
+      />
+    );
   }
   const base = {
     width: size,
     height: size,
-    backgroundColor: def.color,
+    backgroundColor: silhouette ? palette.bark : def.color,
     borderWidth: 3,
     borderColor: 'rgba(74,63,53,0.35)',
   };

@@ -5,6 +5,10 @@ import {
   BOTTLE_CAP,
   BOTTLE_NO_CAP,
   BOTTLE_WRAP_PEEL,
+  RED_BOTTLE_BODY,
+  RED_BOTTLE_CAP,
+  RED_BOTTLE_NO_CAP,
+  RED_BOTTLE_WRAP_PEEL,
 } from "./sprites";
 
 /*
@@ -24,10 +28,10 @@ const LAYER = {
 } as const;
 
 // tight crops: whole 472x1181 -> 200x500 @ x=25; cap 301x217 sits on neck
-const CAP_W = 255;
-const CAP_H = CAP_W * (217 / 301);
-const CAP_X = 125 - CAP_W / 2;
-const CAP_Y = 125;
+export const CAP_W = 255;
+export const CAP_H = CAP_W * (217 / 301);
+const CAP_X = 121 - CAP_W / 2;
+const CAP_Y = 124;
 
 // label band on the whole: y ~38-59% -> circle UI center
 const LABEL_CY = STAGE_H * 0.485;
@@ -44,13 +48,20 @@ export function SpriteBottle({
   peelProg,
   capGone,
   wrapGone,
+  variant = "blue",
 }: {
   twistProg: { value: number };
   capWig: { value: number };
   peelProg: { value: number };
   capGone: boolean;
   wrapGone: boolean;
+  variant?: "blue" | "red";
 }) {
+  const isRed = variant === "red";
+  const S_BODY = isRed ? RED_BOTTLE_BODY : BOTTLE_BODY;
+  const S_CAP = isRed ? RED_BOTTLE_CAP : BOTTLE_CAP;
+  const S_NO_CAP = isRed ? RED_BOTTLE_NO_CAP : BOTTLE_NO_CAP;
+  const S_WRAP = isRed ? RED_BOTTLE_WRAP_PEEL : BOTTLE_WRAP_PEEL;
   const capStyle = useAnimatedStyle(() => ({
     transform: [
       { translateX: capWig.value },
@@ -69,13 +80,13 @@ export function SpriteBottle({
   return (
     <View style={{ width: STAGE_W, height: STAGE_H }}>
       {useNoCap ? (
-        <Image source={BOTTLE_NO_CAP} style={LAYER} resizeMode="contain" />
+        <Image source={S_NO_CAP} style={LAYER} resizeMode="contain" />
       ) : (
-        <Image source={BOTTLE_BODY} style={LAYER} resizeMode="contain" />
+        <Image source={S_BODY} style={LAYER} resizeMode="contain" />
       )}
       {!capGone && (
         <Animated.Image
-          source={BOTTLE_CAP}
+          source={S_CAP}
           style={[
             {
               position: "absolute",
@@ -91,7 +102,7 @@ export function SpriteBottle({
       )}
       {capGone && !wrapGone && (
         <Animated.Image
-          source={BOTTLE_WRAP_PEEL}
+          source={S_WRAP}
           style={[
             {
               position: "absolute",

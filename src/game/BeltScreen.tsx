@@ -24,8 +24,21 @@ import {
   C,
   SW,
 } from "../spike/effects";
+import { BinRect } from "./binHit";
+import {
+  addCash,
+  addXP,
+  drawSeasonal,
+  getActiveSeason,
+  loadSeasonalItems,
+  loadUnionItems,
+  markItemSeen,
+  SeasonDef,
+  starsForAccuracy,
+} from "./db";
 import { DisassemblyModal } from "./DisassemblyModal";
 import { ItemGlyph } from "./ItemGlyph";
+import { BINS, GameItem, ItemDef } from "./items";
 import {
   basinRect,
   RACK,
@@ -35,17 +48,9 @@ import {
   SinkItem,
   SinkStatus,
 } from "./SinkView";
-import { BinRect } from "./binHit";
-import {
-  drawSeasonal,
-  getActiveSeason,
-  loadSeasonalItems,
-  loadUnionItems,
-  markItemSeen,
-  SeasonDef,
-} from "./db";
-import { BINS, GameItem, ItemDef } from "./items";
-import { BIN_SPRITES } from "./sprites";
+import { BELT_BG, BIN_SPRITES } from "./sprites";
+import { spriteTuningFor } from "./spriteSizes";
+import { playCorrect, playWrong } from "../audio/sounds";
 
 /*
  * Phase 6: belt loop as a parameterized shift — region pool, workweek day
@@ -60,14 +65,18 @@ export interface ShiftResult {
   stars: number;
   lessons: string[];
   score: number;
+  cashEarned: number;
+  xpEarned: number;
+  level: number;
+  leveledUp: boolean;
   sawRare: boolean;
   newBest?: boolean;
 }
 
-const BELT_TOP = 250;
-const BELT_H = 120;
-const ITEM_S = 64;
-const ITEM_Y = BELT_TOP + (BELT_H - ITEM_S) / 2 - 8;
+const BELT_TOP = 220;
+const BELT_H = 320;
+const ITEM_S = 80;
+const ITEM_Y = BELT_TOP + (BELT_H - ITEM_S) / 2;
 const SPAWN_X = SW + 40;
 const MISS_X = -ITEM_S - 24;
 const DANGER_X = 70;
@@ -258,13 +267,13 @@ function BeltItem({
     transform: [{ translateX: bx.value + dx.value }, { translateY: dy.value }],
   }));
 
+  const tuning = spriteTuningFor(def.id);
   return (
     <GestureDetector gesture={pan}>
-      <Animated.View style={[styles.item, { top: ITEM_Y }, style]}>
-        <ItemGlyph def={def} />
-        <Text style={styles.itemLabel} numberOfLines={1}>
-          {def.name}
-        </Text>
+      <Animated.View
+        style={[styles.item, { top: ITEM_Y + tuning.dy, left: tuning.dx }, style]}
+      >
+        <ItemGlyph def={def} size={tuning.size} />
       </Animated.View>
     </GestureDetector>
   );
@@ -306,6 +315,7 @@ export function BeltScreen({
   const [sinkItems, setSinkItems] = useState<SinkItem[]>([]);
   const [userPaused, setUserPaused] = useState(false);
   const quitRef = useRef(false);
+  const streakMilestonesRef = useRef<Set<number>>(new Set());
 
   const keyRef = useRef(0);
   const seqRef = useRef(0);
@@ -341,14 +351,37 @@ export function BeltScreen({
   }, []);
 
   // chevron scroll runs unless the user paused (freezes mid-frame, resumes clean)
+  // belt texture scroll + rumble for mechanical feel
+  const beltTex = useSharedValue(0);
+  const beltRumble = useSharedValue(0);
   useEffect(() => {
     if (userPaused) {
       scroll.value = scroll.value;
+      beltTex.value = beltTex.value;
+      beltRumble.value = beltRumble.value;
     } else {
       scroll.value = withRepeat(
         withTiming(-CHEV_GAP, { duration: 450, easing: Easing.linear }),
         -1,
         false,
+      );
+      // texture scroll: one screen width per loop, synced to item speed
+      beltTex.value = withRepeat(
+        withTiming(-SW, {
+          duration: (SW / SPEED) * 1000,
+          easing: Easing.linear,
+        }),
+        -1,
+        false,
+      );
+      // subtle vertical rumble
+      beltRumble.value = withRepeat(
+        withSequence(
+          withTiming(1, { duration: 180 }),
+          withTiming(-1, { duration: 180 }),
+        ),
+        -1,
+        true,
       );
     }
   }, [userPaused]);
@@ -397,8 +430,9 @@ export function BeltScreen({
   const buildQueue = (p: GameItem[], n: number): GameItem[] => {
     const q: GameItem[] = [];
     const bottle = p.find((it) => it.id === "bottle");
-    if (DEBUG_BOTTLE_ONLY && bottle) {
-      for (let i = 0; i < n; i++) q.push(bottle);
+    const bottleRed = p.find((it) => it.id === "bottle-red");
+    if (DEBUG_BOTTLE_ONLY && bottle && bottleRed) {
+      for (let i = 0; i < n; i++) q.push(i % 2 === 0 ? bottle : bottleRed);
       return q;
     }
     for (let i = 0; i < n; i++) {
@@ -411,6 +445,7 @@ export function BeltScreen({
   useEffect(() => {
     if (!pool) return;
     sawRareRef.current = false;
+    streakMilestonesRef.current = new Set();
     queueRef.current = buildQueue(pool, SHIFT_ITEMS);
   }, [runId, pool]);
 
@@ -444,7 +479,33 @@ export function BeltScreen({
       if (quitRef.current) return;
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       const accuracy = resolved > 0 ? correct / resolved : 0;
-      const stars = accuracy >= 0.9 ? 3 : accuracy >= 0.7 ? 2 : 1;
+      const stars = starsForAccuracy(correct, resolved);
+      // cash: $20 base (50%+ accuracy only) + $2/correct + streak bonuses
+      const baseCash = accuracy >= 0.5 ? 20 : 0;
+      const sortCash = correct * 2;
+      const milestones = streakMilestonesRef.current;
+      let streakCash = 0;
+      let streakXP = 0;
+      if (milestones.has(5)) {
+        streakCash += 5;
+        streakXP += 5;
+      }
+      if (milestones.has(10)) {
+        streakCash += 8;
+        streakXP += 5;
+      }
+      if (milestones.has(15)) {
+        streakCash += 10;
+        streakXP += 5;
+      }
+      if (milestones.has(20)) {
+        streakCash += 15;
+        streakXP += 15;
+      }
+      const totalCash = baseCash + sortCash + streakCash;
+      const totalXP = correct * 10 + streakXP;
+      const newCash = addCash(totalCash);
+      const { level, leveledUp } = addXP(totalXP);
       onShiftEndRef.current({
         correct,
         total: resolved,
@@ -454,6 +515,10 @@ export function BeltScreen({
         lessons: Array.from(lessonsRef.current.values()),
         score: correct,
         sawRare: sawRareRef.current,
+        cashEarned: totalCash,
+        xpEarned: totalXP,
+        level,
+        leveledUp,
       });
     }, 700);
     return () => clearTimeout(t);
@@ -499,6 +564,16 @@ export function BeltScreen({
     setStreak(0);
   };
 
+  const bumpStreak = () => {
+    streakRef.current += 1;
+    const s = streakRef.current;
+    setStreak(s);
+    setBestStreak((b) => Math.max(b, s));
+    for (const m of [5, 10, 15, 20]) {
+      if (s >= m) streakMilestonesRef.current.add(m);
+    }
+  };
+
   const handleDrop = (
     key: number,
     defId: string,
@@ -516,15 +591,15 @@ export function BeltScreen({
     const bin = BINS[binIdx];
     if (bin.id === def.bin) {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+      playCorrect();
       addBurst(x, y);
       markItemSeen(def.id);
       setCorrect((c) => c + 1);
-      streakRef.current += 1;
-      setStreak(streakRef.current);
-      setBestStreak((b) => Math.max(b, streakRef.current));
+      bumpStreak();
       setHint(null);
     } else {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+      playWrong();
       wrongSort(def);
     }
     setResolved((r) => r + 1);
@@ -557,9 +632,7 @@ export function BeltScreen({
     setModal(null);
     if (allCorrect) {
       setCorrect((c) => c + 1);
-      streakRef.current += 1;
-      setStreak(streakRef.current);
-      setBestStreak((b) => Math.max(b, streakRef.current));
+      bumpStreak();
     } else {
       streakRef.current = 0;
       setStreak(0);
@@ -627,15 +700,15 @@ export function BeltScreen({
     const bin = BINS[binIdx];
     if (bin.id === def.bin) {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+      playCorrect();
       addBurst(x, y);
       markItemSeen(def.id);
       setCorrect((c) => c + 1);
-      streakRef.current += 1;
-      setStreak(streakRef.current);
-      setBestStreak((b) => Math.max(b, streakRef.current));
+      bumpStreak();
       setHint(null);
     } else {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+      playWrong();
       wrongSort(def);
     }
     setResolved((r) => r + 1);
@@ -658,6 +731,12 @@ export function BeltScreen({
   }));
   const missStyle = useAnimatedStyle(() => ({
     opacity: missFlash.value,
+  }));
+  const beltTexStyle = useAnimatedStyle(() => ({
+    transform: [{ translateX: beltTex.value }],
+  }));
+  const beltRumbleStyle = useAnimatedStyle(() => ({
+    transform: [{ translateY: beltRumble.value }],
   }));
 
   const waitingOnSink =
@@ -716,22 +795,29 @@ export function BeltScreen({
         </Text>
       )}
 
-      {/* belt */}
-      <View style={[styles.belt, { top: BELT_TOP, height: BELT_H }]}>
-        <Animated.View style={[styles.chevStrip, chevStyle]}>
-          {Array.from({
-            length: Math.ceil((SW + CHEV_GAP * 2) / CHEV_GAP),
-          }).map((_, i) => (
-            <Text key={i} style={styles.chev}>
-              ›
-            </Text>
-          ))}
-        </Animated.View>
-        <Animated.View
-          style={[styles.missEdge, missStyle]}
-          pointerEvents="none"
+      {/* belt: single texture + rumble */}
+      <Animated.View
+        style={[
+          styles.belt,
+          { top: BELT_TOP, height: BELT_H },
+          beltRumbleStyle,
+        ]}
+      >
+        <Image
+          source={BELT_BG}
+          style={{ width: SW, height: BELT_H }}
+          resizeMode="stretch"
         />
-      </View>
+      </Animated.View>
+      {/* danger flash: sibling with explicit belt height */}
+      <Animated.View
+        style={[
+          styles.missEdge,
+          { top: BELT_TOP + (BELT_H - 87) / 2, height: 102 },
+          missStyle,
+        ]}
+        pointerEvents="none"
+      />
 
       {/* items */}
       {items.map((it) => (
@@ -812,6 +898,7 @@ export function BeltScreen({
           ticker={queueRef.current.slice(0, 3)}
           danger={danger}
           parts={modal.item.parts ?? []}
+          itemId={modal.item.id}
           onClose={handleModalClose}
         />
       )}
@@ -922,10 +1009,9 @@ const styles = StyleSheet.create({
   },
   belt: {
     position: "absolute",
-    left: 24,
-    right: 24,
-    backgroundColor: C.belt,
-    borderRadius: 18,
+    left: 0,
+    right: 0,
+    backgroundColor: "transparent",
     overflow: "hidden",
     justifyContent: "center",
   },
@@ -945,18 +1031,18 @@ const styles = StyleSheet.create({
   missEdge: {
     position: "absolute",
     left: 0,
-    top: 0,
-    bottom: 0,
     width: 26,
     backgroundColor: "#D95F4B",
-    borderTopLeftRadius: 18,
-    borderBottomLeftRadius: 18,
   },
   item: {
     position: "absolute",
     left: 0,
     width: ITEM_S + 16,
     alignItems: "center",
+    shadowColor: "#000",
+    shadowOpacity: 0.25,
+    shadowRadius: 4,
+    shadowOffset: { width: 0, height: 3 },
   },
   itemLabel: {
     marginTop: 4,

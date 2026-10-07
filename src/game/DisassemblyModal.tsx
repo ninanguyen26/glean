@@ -30,8 +30,14 @@ import {
 } from "../spike/effects";
 import { hitBinPoint } from "./binHit";
 import { BinId, BINS, ItemDef, PartDef } from "./items";
-import { SpriteBottle } from "./SpriteBottle";
-import { BIN_SPRITES, BOTTLE_CAP_CHIP, BOTTLE_WRAP_CHIP } from "./sprites";
+import { CAP_H, CAP_W, SpriteBottle } from "./SpriteBottle";
+import {
+  BIN_SPRITES,
+  BOTTLE_CAP_CHIP,
+  BOTTLE_WRAP_CHIP,
+  RED_BOTTLE_CAP,
+  RED_BOTTLE_WRAP_PEEL,
+} from "./sprites";
 
 /*
  * Phase 3: production disassembly modal.
@@ -60,6 +66,7 @@ export function DisassemblyModal({
   ticker,
   danger,
   parts,
+  itemId,
   onClose,
 }: {
   origin: { x: number; y: number };
@@ -67,6 +74,7 @@ export function DisassemblyModal({
   ticker: ItemDef[];
   danger: boolean;
   parts: PartDef[];
+  itemId?: string;
   onClose: (allCorrect: boolean) => void;
 }) {
   // part -> bin mapping comes from the item record (data-driven since phase 5)
@@ -396,6 +404,7 @@ export function DisassemblyModal({
                 peelProg={peelProg}
                 capGone={capGone}
                 wrapGone={wrapGone}
+                variant={itemId === "bottle-red" ? "red" : "blue"}
               />
             </Animated.View>
           </GestureDetector>
@@ -463,16 +472,18 @@ export function DisassemblyModal({
               style={[
                 {
                   position: "absolute",
-                  left: SW - 200,
-                  top: BY + 130,
-                  width: 184,
-                  height: 138,
+                  left: SW - 235,
+                  top: BY + 125,
+                  width: CAP_W,
+                  height: CAP_H,
                 },
                 capStyle,
               ]}
             >
               <Image
-                source={BOTTLE_CAP_CHIP}
+                source={
+                  itemId === "bottle-red" ? RED_BOTTLE_CAP : BOTTLE_CAP_CHIP
+                }
                 style={{ width: "100%", height: "100%" }}
                 resizeMode="contain"
               />
@@ -505,7 +516,11 @@ export function DisassemblyModal({
               ]}
             >
               <Image
-                source={BOTTLE_WRAP_CHIP}
+                source={
+                  itemId === "bottle-red"
+                    ? RED_BOTTLE_WRAP_PEEL
+                    : BOTTLE_WRAP_CHIP
+                }
                 style={{ width: "100%", height: "100%" }}
                 resizeMode="contain"
               />

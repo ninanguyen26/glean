@@ -12,7 +12,7 @@ declare const require: any;
 
 const SEED: GameItem[] = require('../../data/seed/items.json').items;
 const REGION_SEED: RegionDef[] = require('../../data/seed/regions.json').regions;
-const DB_VERSION = 2;
+const DB_VERSION = 6;
 
 export interface SeasonItemSeed {
   id: string;
@@ -22,12 +22,16 @@ export interface SeasonItemSeed {
   shape: 'circle' | 'rect' | 'diamond';
   rarity: 'common' | 'uncommon' | 'rare';
   teaching?: string;
+  needsRinse?: boolean;
 }
 
 export interface SeasonDef {
   id: string;
   name: string;
-  active: boolean;
+  startMonth: number;
+  startDay: number;
+  endMonth: number;
+  endDay: number;
   replaceRate: number;
   items: SeasonItemSeed[];
 }
@@ -83,6 +87,12 @@ function ensureSeeded(db: any) {
       ts INTEGER NOT NULL
     );
     CREATE TABLE IF NOT EXISTS seen_items (item_id TEXT PRIMARY KEY, ts INTEGER);
+    CREATE TABLE IF NOT EXISTS player_profile (
+      id INTEGER PRIMARY KEY CHECK (id = 1),
+      cash INTEGER NOT NULL DEFAULT 0,
+      xp INTEGER NOT NULL DEFAULT 0
+    );
+    INSERT OR IGNORE INTO player_profile (id, cash, xp) VALUES (1, 0, 0);
   `);
   // migrate v1 tables that lack the seasonal columns
   const cols: any[] = db.getAllSync('PRAGMA table_info(items)');
@@ -125,8 +135,8 @@ function ensureSeeded(db: any) {
     for (const s of SEASON_SEED) {
       for (const it of s.items) {
         db.runSync(
-          'INSERT OR REPLACE INTO items (id, region, name, bin, color, shape, season, rarity, teaching) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
-          [it.id, 'seasonal', it.name, it.bin, it.color, it.shape, s.id, it.rarity, it.teaching ?? null],
+          'INSERT OR REPLACE INTO items (id, region, name, bin, color, shape, season, rarity, teaching, needs_rinse) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+          [it.id, 'seasonal', it.name, it.bin, it.color, it.shape, s.id, it.rarity, it.teaching ?? null, it.needsRinse ? 1 : 0],
         );
       }
     }
@@ -308,8 +318,35 @@ export function loadProgress(): ProgressSnapshot {
 
 /* ---------------- seasonal ---------------- */
 
-export function getActiveSeason(): SeasonDef | null {
-  return SEASON_SEED.find((s) => s.active) ?? null;
+export function getActiveSeason(now = new Date()): SeasonDef | null {
+  const m = now.getMonth() + 1;
+  const d = now.getDate();
+  const md = m * 100 + d;
+  for (const s of SEASON_SEED) {
+    const start = s.startMonth * 100 + s.startDay;
+    const end = s.endMonth * 100 + s.endDay;
+    if (start <= end) {
+      if (md >= start && md <= end) return s;
+    } else {
+      // wraps the year (e.g. winter Dec-Feb)
+      if (md >= start || md <= end) return s;
+    }
+  }
+  return null;
+}
+
+export function getAllSeasons(): SeasonDef[] {
+  return SEASON_SEED;
+}
+
+/** Universal items (COMMON album tab), from the bundled seed. */
+export function getUniversalItems(): GameItem[] {
+  return SEED.filter((it) => it.region === 'universal');
+}
+
+/** One city's items (SPECIAL album tab), from the bundled seed. */
+export function getCityItems(regionId: string): GameItem[] {
+  return SEED.filter((it) => it.region === regionId);
 }
 
 export async function loadSeasonalItems(seasonId: string): Promise<GameItem[]> {
@@ -399,4 +436,73 @@ export function drawSeasonal(items: GameItem[], seasonId: string): GameItem {
   const pick = pool[Math.floor(Math.random() * pool.length)];
   if (pick.rarity === 'rare') resetRarePity(seasonId);
   return pick;
+}
+
+/* ---------------- player progression ---------------- */
+
+const memProfile = { cash: 0, xp: 0 };
+
+export function getCash(): number {
+  const db = openDb();
+  if (!db) return memProfile.cash;
+  ensureSeeded(db);
+  const row: any = db.getFirstSync('SELECT cash FROM player_profile WHERE id = 1');
+  return row ? row.cash : 0;
+}
+
+export function getXP(): number {
+  const db = openDb();
+  if (!db) return memProfile.xp;
+  ensureSeeded(db);
+  const row: any = db.getFirstSync('SELECT xp FROM player_profile WHERE id = 1');
+  return row ? row.xp : 0;
+}
+
+/** Level from cumulative XP: L1 0-199, L2 200-599, L3 600-1199, ... (200 x level). */
+export function getLevel(xp?: number): number {
+  const total = xp ?? getXP();
+  let level = 1;
+  let threshold = 200;
+  let cumulative = 0;
+  while (total >= cumulative + threshold) {
+    cumulative += threshold;
+    level += 1;
+    threshold += 200;
+  }
+  return level;
+}
+
+export function addCash(n: number): number {
+  const db = openDb();
+  if (!db) {
+    memProfile.cash += n;
+    return memProfile.cash;
+  }
+  ensureSeeded(db);
+  db.runSync('UPDATE player_profile SET cash = cash + ? WHERE id = 1', [n]);
+  return getCash();
+}
+
+export function addXP(n: number): { xp: number; level: number; leveledUp: boolean } {
+  const oldLevel = getLevel();
+  const db = openDb();
+  if (!db) {
+    memProfile.xp += n;
+  } else {
+    ensureSeeded(db);
+    db.runSync('UPDATE player_profile SET xp = xp + ? WHERE id = 1', [n]);
+  }
+  const xp = getXP();
+  const level = getLevel(xp);
+  return { xp, level, leveledUp: level > oldLevel };
+}
+
+/** Stars from accuracy: 90%+ = 3, 70%+ = 2, 50%+ = 1, else 0. */
+export function starsForAccuracy(correct: number, total: number): number {
+  if (total === 0) return 0;
+  const acc = correct / total;
+  if (acc >= 0.9) return 3;
+  if (acc >= 0.7) return 2;
+  if (acc >= 0.5) return 1;
+  return 0;
 }

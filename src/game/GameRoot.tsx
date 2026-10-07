@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { C } from '../spike/effects';
+import { HomeScreen } from './HomeScreen';
 import { MapScreen } from './MapScreen';
 import { RulesScreen } from './RulesScreen';
 import { SummaryScreen } from './SummaryScreen';
@@ -17,19 +18,21 @@ import {
   recordEndlessBest,
 } from './db';
 
-/* Phase 6: progression shell nav — map -> rules -> shift -> summary. */
+/* Phase 6: progression shell nav — map -> rules -> shift -> summary.
+   The album is a modal overlay, not a screen, so home/map stays behind it. */
 
 type Screen =
+  | { name: 'home' }
   | { name: 'map' }
   | { name: 'rules'; city: string }
   | { name: 'shift'; city: string; day: number; key: number }
   | { name: 'endless'; key: number }
-  | { name: 'album' }
   | { name: 'summary'; result: ShiftResult; city: string | null; day: number };
 
 export function GameRoot() {
-  const [screen, setScreen] = useState<Screen>({ name: 'map' });
+  const [screen, setScreen] = useState<Screen>({ name: 'home' });
   const [progress, setProgress] = useState<ProgressSnapshot | null>(null);
+  const [albumOpen, setAlbumOpen] = useState(false);
 
   const refresh = () => setProgress(loadProgress());
   useEffect(refresh, []);
@@ -48,34 +51,53 @@ export function GameRoot() {
     );
   }
 
+  let content: React.ReactNode;
   switch (screen.name) {
+    case 'home': {
+      // play: first unlocked city with an incomplete week
+      const playCity = progress.cities.find((c) => c.unlocked && c.nextDay <= 5);
+      content = (
+        <HomeScreen
+          onPlay={() =>
+            playCity
+              ? setScreen({ name: 'rules', city: playCity.id })
+              : setScreen({ name: 'map' })
+          }
+          onMap={() => setScreen({ name: 'map' })}
+          onAlbum={() => setAlbumOpen(true)}
+        />
+      );
+      break;
+    }
     case 'map':
-      return (
+      content = (
         <MapScreen
           progress={progress}
           onSelectCity={(cityId) => setScreen({ name: 'rules', city: cityId })}
           onEndless={() => setScreen({ name: 'endless', key: 0 })}
-          onAlbum={() => setScreen({ name: 'album' })}
+          onAlbum={() => setAlbumOpen(true)}
         />
       );
-    case 'album':
-      return <AlbumScreen onBack={() => setScreen({ name: 'map' })} />;
+      break;
     case 'rules': {
       const region = getRegionDef(screen.city);
       const p = progress.cities.find((c) => c.id === screen.city)!;
-      return (
+      content = (
         <RulesScreen
           region={region}
           day={p.nextDay}
-          onStart={() => setScreen({ name: 'shift', city: screen.city, day: p.nextDay, key: 0 })}
-          onBack={() => setScreen({ name: 'map' })}
+          onStart={() =>
+            setScreen({ name: 'shift', city: screen.city, day: p.nextDay, key: 0 })
+          }
+          onBack={() => setScreen({ name: 'home' })}
         />
       );
+      break;
     }
     case 'shift': {
       const region = getRegionDef(screen.city);
-      const title = `${region.name.toUpperCase()} — ${DAY_LABELS[screen.day - 1]}`;
-      return (
+      const title = `${region.name.toUpperCase()} \u2014 ${DAY_LABELS[screen.day - 1]}`;
+      content = (
         <BeltScreen
           key={`shift-${screen.city}-${screen.day}-${screen.key}`}
           regionId={screen.city}
@@ -88,14 +110,15 @@ export function GameRoot() {
           }}
           onQuit={() => {
             refresh();
-            setScreen({ name: 'map' });
+            setScreen({ name: 'home' });
           }}
         />
       );
+      break;
     }
     case 'endless': {
       const unlockedIds = progress.cities.filter((c) => c.unlocked).map((c) => c.id);
-      return (
+      content = (
         <BeltScreen
           key={`endless-${screen.key}`}
           regionId={unlockedIds}
@@ -109,20 +132,21 @@ export function GameRoot() {
           }}
           onQuit={() => {
             refresh();
-            setScreen({ name: 'map' });
+            setScreen({ name: 'home' });
           }}
         />
       );
+      break;
     }
     case 'summary': {
       const region = screen.city ? getRegionDef(screen.city) : null;
-      return (
+      content = (
         <SummaryScreen
           result={screen.result}
           region={region}
           onContinue={() => {
             refresh();
-            setScreen({ name: 'map' });
+            setScreen({ name: 'home' });
           }}
           onReplay={() =>
             screen.city
@@ -131,11 +155,20 @@ export function GameRoot() {
           }
         />
       );
+      break;
     }
   }
+
+  return (
+    <View style={styles.root}>
+      {content}
+      {albumOpen && <AlbumScreen onBack={() => setAlbumOpen(false)} />}
+    </View>
+  );
 }
 
 const styles = StyleSheet.create({
+  root: { flex: 1 },
   loading: { flex: 1, backgroundColor: C.bg, justifyContent: 'center', alignItems: 'center' },
   loadingText: { fontSize: 17, fontWeight: '700', color: C.sub },
 });
