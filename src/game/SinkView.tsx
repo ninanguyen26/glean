@@ -1,18 +1,19 @@
-import React, { useEffect, useRef, useState } from 'react';
-import { View, Text, StyleSheet } from 'react-native';
-import { Gesture, GestureDetector } from 'react-native-gesture-handler';
+import { palette } from "@/constants/theme";
+import { Canvas, Circle, Path, Skia } from "@shopify/react-native-skia";
+import * as Haptics from "expo-haptics";
+import { useEffect, useRef, useState } from "react";
+import { StyleSheet, Text, View } from "react-native";
+import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import Animated, {
-  useSharedValue,
-  useAnimatedStyle,
-  withSpring,
   runOnJS,
-} from 'react-native-reanimated';
-import * as Haptics from 'expo-haptics';
-import { Canvas, Circle, Path, Skia } from '@shopify/react-native-skia';
-import { SW } from '../spike/effects';
-import { ItemDef } from './items';
-import { ItemGlyph } from './ItemGlyph';
-import { BinRect, hitBinPoint } from './binHit';
+  useAnimatedStyle,
+  useSharedValue,
+  withSpring,
+} from "react-native-reanimated";
+import { SW } from "../spike/effects";
+import { ItemGlyph } from "./ItemGlyph";
+import { BinRect, hitBinPoint } from "./binHit";
+import { ItemDef } from "./items";
 
 /*
  * Phase 6 (rework): one big FIFO sink. Unlimited dirty intake; items rinse
@@ -23,29 +24,49 @@ import { BinRect, hitBinPoint } from './binHit';
  * screen (recreating every item's gesture mid-drag).
  */
 
-export const SINK_TOP = 552;
+export const SINK_TOP = 400;
 export const RINSE_SECS = 15;
 export const RACK_CAP = 4;
 
-// sink band sits between the PREP tray (ends 524) and the bins (start ~664)
-export const BASIN = { x: 24, y: 544, w: 180, h: 108 };
-export const RACK = { x: 216, y: 524, w: SW - 240, h: 136 };
-
-// single drop target for dirty items
-export const basinRect: BinRect = { x: BASIN.x, y: BASIN.y, w: BASIN.w, h: BASIN.h };
-
-const RACK_S = 50;
-const rackSlot = (i: number) => {
-  const gw = 2 * RACK_S + 8;
-  const ox = RACK.x + (RACK.w - gw) / 2;
-  return {
-    x: ox + (i % 2) * (RACK_S + 8),
-    y: RACK.y + 28 + Math.floor(i / 2) * (RACK_S + 8),
-    s: RACK_S,
-  };
+// work area: sink top-left, a row of 4 rack slots below it,
+// prep tray right (3:4)
+export const ZONE = { x: 24, y: 472, w: SW - 48, h: 224 };
+const Z_GAP = 12;
+const COL_W = (ZONE.w - Z_GAP) / 2;
+const ROW_H = (ZONE.h - Z_GAP) / 2;
+export const SINK_RECT = { x: ZONE.x, y: ZONE.y, w: COL_W, h: ROW_H + 96 };
+export const TRAY_RECT = {
+  x: ZONE.x + COL_W + Z_GAP,
+  y: ZONE.y,
+  w: COL_W,
+  h: (COL_W * 4) / 3,
 };
 
-export type SinkStatus = 'queued' | 'rinsing' | 'done' | 'rack';
+// basin sits on the sink section; the rack is a plain row of 4 slots
+// below the sink (no art). basinRect is the dirty-item drop target.
+export const BASIN = { ...SINK_RECT };
+const RACK_S = 35;
+const RACK_GAP = 8;
+export const RACK = {
+  x: ZONE.x + 12,
+  y: SINK_RECT.y + SINK_RECT.h + Z_GAP - 8,
+  w: 4 * RACK_S + 3 * RACK_GAP,
+  h: RACK_S,
+};
+export const basinRect: BinRect = {
+  x: BASIN.x,
+  y: BASIN.y,
+  w: BASIN.w,
+  h: BASIN.h,
+};
+
+const rackSlot = (i: number) => ({
+  x: RACK.x + i * (RACK_S + RACK_GAP),
+  y: RACK.y,
+  s: RACK_S,
+});
+
+export type SinkStatus = "queued" | "rinsing" | "done" | "rack";
 
 export interface SinkItem {
   key: number;
@@ -56,7 +77,13 @@ export interface SinkItem {
 
 /* Four-quarter pie: each quarter fills continuously as its turn comes,
    so the pie starts moving the instant the rinse starts; green when done. */
-function RinsePie({ progress, size = 76 }: { progress: number; size?: number }) {
+function RinsePie({
+  progress,
+  size = 76,
+}: {
+  progress: number;
+  size?: number;
+}) {
   const done = progress >= 1;
   const r = size / 2 - 3;
   const cx = size / 2;
@@ -67,7 +94,11 @@ function RinsePie({ progress, size = 76 }: { progress: number; size?: number }) 
       if (frac <= 0) return null;
       const p = Skia.Path.Make();
       p.moveTo(cx, cy);
-      p.addArc({ x: cx - r, y: cy - r, width: r * 2, height: r * 2 }, -90 + i * 90, frac * 90);
+      p.addArc(
+        { x: cx - r, y: cy - r, width: r * 2, height: r * 2 },
+        -90 + i * 90,
+        frac * 90,
+      );
       p.close();
       return p;
     })
@@ -76,7 +107,7 @@ function RinsePie({ progress, size = 76 }: { progress: number; size?: number }) 
     <Canvas style={{ width: size, height: size }}>
       <Circle cx={cx} cy={cy} r={r} color="#EFE6D2" />
       {quarters.map((p, i) => (
-        <Path key={i} path={p!} color={done ? '#7FB069' : '#E8A13D'} />
+        <Path key={i} path={p!} color={done ? "#7FB069" : "#E8A13D"} />
       ))}
     </Canvas>
   );
@@ -91,9 +122,9 @@ export function SinkBasin({
   onRinseDone: (key: number) => void;
   paused: boolean;
 }) {
-  const rinsing = items.find((i) => i.status === 'rinsing');
-  const queued = items.filter((i) => i.status === 'queued');
-  const done = items.filter((i) => i.status === 'done');
+  const rinsing = items.find((i) => i.status === "rinsing");
+  const queued = items.filter((i) => i.status === "queued");
+  const done = items.filter((i) => i.status === "done");
   const [progress, setProgress] = useState(0);
   const onRinseDoneRef = useRef(onRinseDone);
   onRinseDoneRef.current = onRinseDone;
@@ -127,8 +158,12 @@ export function SinkBasin({
   }, [rinsing?.key]);
 
   return (
-    <View style={[styles.basin, { left: BASIN.x, top: BASIN.y, width: BASIN.w, height: BASIN.h }]}>
-      <Text style={styles.basinLabel}>SINK</Text>
+    <View
+      style={[
+        styles.basin,
+        { left: BASIN.x, top: BASIN.y, width: BASIN.w, height: BASIN.h },
+      ]}
+    >
       {rinsing ? (
         <View style={styles.rinsing}>
           <RinsePie progress={progress} size={68} />
@@ -136,18 +171,16 @@ export function SinkBasin({
             <ItemGlyph def={rinsing.def} size={36} />
           </View>
         </View>
-      ) : (
-        <View style={styles.rinsing}>
-          <Text style={styles.idle}>drop dirty items here</Text>
-        </View>
-      )}
+      ) : null}
       <View style={styles.queue}>
         {queued.slice(0, 3).map((q) => (
           <View key={q.key} style={styles.qGlyph}>
             <ItemGlyph def={q.def} size={26} />
           </View>
         ))}
-        {queued.length > 3 && <Text style={styles.qMore}>+{queued.length - 3}</Text>}
+        {queued.length > 3 && (
+          <Text style={styles.qMore}>+{queued.length - 3}</Text>
+        )}
         {done.map((d) => (
           <View key={d.key} style={styles.qGlyph}>
             <ItemGlyph def={d.def} size={26} />
@@ -168,7 +201,13 @@ export function RackSlot({
   item: SinkItem | null;
   index: number;
   binRects: { value: BinRect[] };
-  onCleanDrop: (key: number, defId: string, binIdx: number, x: number, y: number) => void;
+  onCleanDrop: (
+    key: number,
+    defId: string,
+    binIdx: number,
+    x: number,
+    y: number,
+  ) => void;
 }) {
   const tx = useSharedValue(0);
   const ty = useSharedValue(0);
@@ -189,7 +228,13 @@ export function RackSlot({
       if (!item) return;
       const hit = hitBinPoint(binRects, e.absoluteX, e.absoluteY);
       if (hit >= 0) {
-        runOnJS(onCleanDrop)(item.key, item.def.id, hit, e.absoluteX, e.absoluteY);
+        runOnJS(onCleanDrop)(
+          item.key,
+          item.def.id,
+          hit,
+          e.absoluteX,
+          e.absoluteY,
+        );
       } else {
         tx.value = withSpring(0, { damping: 18 });
         ty.value = withSpring(0, { damping: 18 });
@@ -201,11 +246,16 @@ export function RackSlot({
   }));
 
   return (
-    <View style={[styles.rackSlot, { left: s.x, top: s.y, width: s.s, height: s.s }]}>
+    <View
+      style={[
+        styles.rackSlot,
+        { left: s.x, top: s.y, width: s.s, height: s.s },
+      ]}
+    >
       {item ? (
         <GestureDetector gesture={pan}>
           <Animated.View style={[styles.rackInner, dragStyle]}>
-            <ItemGlyph def={item.def} size={40} />
+            <ItemGlyph def={item.def} size={30} />
           </Animated.View>
         </GestureDetector>
       ) : (
@@ -217,92 +267,71 @@ export function RackSlot({
 
 const styles = StyleSheet.create({
   basin: {
-    position: 'absolute',
-    backgroundColor: 'rgba(127,179,213,0.16)',
-    borderRadius: 20,
-    borderWidth: 2,
-    borderColor: 'rgba(127,179,213,0.35)',
-    flexDirection: 'row',
-    alignItems: 'center',
+    position: "absolute",
+    flexDirection: "row",
+    alignItems: "center",
     paddingLeft: 12,
-  },
-  basinLabel: {
-    position: 'absolute',
-    left: 14,
-    top: 6,
-    fontSize: 11,
-    fontWeight: '800',
-    letterSpacing: 3,
-    color: '#7FA3B8',
   },
   rinsing: {
     width: 80,
     height: 80,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginTop: 16,
+    justifyContent: "center",
+    alignItems: "center",
   },
   glyph: {
-    position: 'absolute',
-  },
-  idle: {
-    textAlign: 'center',
-    fontSize: 12,
-    fontWeight: '600',
-    color: '#7FA3B8',
-    lineHeight: 18,
+    position: "absolute",
   },
   queue: {
     flex: 1,
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    alignItems: 'center',
-    paddingRight: 8,
+    flexDirection: "row",
+    flexWrap: "wrap",
+    alignItems: "center",
+    paddingRight: 109,
     marginTop: 10,
     gap: 2,
   },
   qGlyph: {
     width: 30,
     height: 30,
-    justifyContent: 'center',
-    alignItems: 'center',
+    justifyContent: "center",
+    alignItems: "center",
   },
   qMore: {
     fontSize: 13,
-    fontWeight: '800',
-    color: '#7FA3B8',
-    marginLeft: 2,
+    fontWeight: "800",
+    color: "#7FA3B8",
+    marginLeft: 3,
   },
   doneCheck: {
-    position: 'absolute',
+    position: "absolute",
     right: -2,
     bottom: -2,
     fontSize: 14,
-    fontWeight: '900',
-    color: '#7FB069',
-    backgroundColor: '#fff',
+    fontWeight: "900",
+    color: "#7FB069",
+    backgroundColor: "#fff",
     borderRadius: 8,
-    overflow: 'hidden',
+    overflow: "hidden",
     paddingHorizontal: 2,
   },
   rackSlot: {
-    position: 'absolute',
-    justifyContent: 'center',
-    alignItems: 'center',
+    position: "absolute",
+    justifyContent: "center",
+    alignItems: "center",
   },
   rackEmpty: {
-    width: '100%',
-    height: '100%',
+    width: "100%",
+    height: "100%",
     borderRadius: 14,
     borderWidth: 2,
-    borderStyle: 'dashed',
-    borderColor: '#C9B998',
-    backgroundColor: 'rgba(123,174,110,0.07)',
+    borderStyle: "dashed",
+    borderColor: palette.gold,
+    backgroundColor: palette.oat,
   },
   rackInner: {
-    width: '100%',
-    height: '100%',
-    justifyContent: 'center',
-    alignItems: 'center',
+    width: "100%",
+    height: "100%",
+    justifyContent: "center",
+    alignItems: "center",
   },
 });

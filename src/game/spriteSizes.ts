@@ -24,6 +24,7 @@ export const SPRITE_TUNING: Record<
   "foam-cup": { size: 72, dx: 0, dy: 0 },
   "chip-bag": { size: 72, dx: 0, dy: 0 },
   "cig-butt": { size: 72, dx: 0, dy: 0 },
+  "cig-butts": { size: 72, dx: 0, dy: 0 },
   "broken-pen": { size: 72, dx: 0, dy: 0 },
   // ── portland ──
   "pizza-box": { size: 72, dx: 0, dy: 0 },
@@ -130,7 +131,7 @@ export const SPRITE_TUNING: Record<
   "candy-wrappers": { size: 72, dx: 0, dy: 0 },
   "halloween-mask": { size: 81, dx: 0, dy: 1 },
   "cider-jug": { size: 115, dx: 0, dy: -32 },
-  "mini-gourd-1": { size: 88, dx: 0, dy: -10 },
+  "mini-gourd-1": { size: 80, dx: 0, dy: -8 },
   "halloween-mask-1": { size: 81, dx: 0, dy: 1 },
   "fake-web": { size: 72, dx: 0, dy: 0 },
   "aluminum-pie-tin": { size: 125, dx: 0, dy: -35 },

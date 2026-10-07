@@ -1,6 +1,13 @@
 import * as Haptics from "expo-haptics";
 import { useEffect, useRef, useState } from "react";
-import { Image, Pressable, StyleSheet, Text, View } from "react-native";
+import {
+  Image,
+  ImageBackground,
+  Pressable,
+  StyleSheet,
+  Text,
+  View,
+} from "react-native";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import Animated, {
   Easing,
@@ -13,6 +20,8 @@ import Animated, {
   withSpring,
   withTiming,
 } from "react-native-reanimated";
+import { playCorrect, playWrong } from "../audio/sounds";
+import { palette } from "../constants/theme";
 import {
   BIN_BOTTOM,
   BIN_GAP,
@@ -30,6 +39,7 @@ import {
   addXP,
   drawSeasonal,
   getActiveSeason,
+  incrementSortCount,
   loadSeasonalItems,
   loadUnionItems,
   markItemSeen,
@@ -39,18 +49,30 @@ import {
 import { DisassemblyModal } from "./DisassemblyModal";
 import { ItemGlyph } from "./ItemGlyph";
 import { BINS, GameItem, ItemDef } from "./items";
+import { LifetimeHud } from "./LifetimeHud";
 import {
   basinRect,
-  RACK,
   RACK_CAP,
   RackSlot,
+  SINK_RECT,
   SinkBasin,
   SinkItem,
   SinkStatus,
+  TRAY_RECT,
 } from "./SinkView";
-import { BELT_BG, BIN_SPRITES } from "./sprites";
+import {
+  BELT_BG,
+  BIN_SPRITES,
+  ICON_AUTUMN,
+  ICON_PAUSE,
+  ICON_QUIT,
+  ICON_RESUME,
+  ICON_SPRING,
+  ICON_STREAK,
+  ICON_SUMMER,
+  ICON_WINTER,
+} from "./sprites";
 import { spriteTuningFor } from "./spriteSizes";
-import { playCorrect, playWrong } from "../audio/sounds";
 
 /*
  * Phase 6: belt loop as a parameterized shift — region pool, workweek day
@@ -89,8 +111,28 @@ const ENDLESS_LIVES = 3;
 // DEBUG: spawn only bottles (skip the full game loop when testing the modal)
 const DEBUG_BOTTLE_ONLY = false;
 
-// prep drop zone (main screen, between belt and sink)
-const PREP = { x: SW / 2 - 110, y: 432, w: 220, h: 92 };
+// work area: sink top-left, a row of 4 rack slots below it, prep tray
+// right (3:4); the tray doubles as the bottle prep drop zone
+const PREP = {
+  x: TRAY_RECT.x,
+  y: TRAY_RECT.y,
+  w: TRAY_RECT.w,
+  h: TRAY_RECT.h,
+};
+
+// absolute-fill style for a zone rect
+const zoneStyle = (r: { x: number; y: number; w: number; h: number }) => ({
+  position: "absolute" as const,
+  left: r.x,
+  top: r.y,
+  width: r.w,
+  height: r.h,
+});
+
+const SINK_IMG = require("../../assets/extra/sink.png");
+const TRAY_IMG = require("../../assets/extra/prep-tray.png");
+const TABLE_IMG = require("../../assets/extra/table.png");
+const PORTLAND_BG = require("../../assets/background/portland-bg.png");
 
 function BeltItem({
   itemKey,
@@ -271,7 +313,11 @@ function BeltItem({
   return (
     <GestureDetector gesture={pan}>
       <Animated.View
-        style={[styles.item, { top: ITEM_Y + tuning.dy, left: tuning.dx }, style]}
+        style={[
+          styles.item,
+          { top: ITEM_Y + tuning.dy, left: tuning.dx },
+          style,
+        ]}
       >
         <ItemGlyph def={def} size={tuning.size} />
       </Animated.View>
@@ -594,6 +640,7 @@ export function BeltScreen({
       playCorrect();
       addBurst(x, y);
       markItemSeen(def.id);
+      incrementSortCount(def.id);
       setCorrect((c) => c + 1);
       bumpStreak();
       setHint(null);
@@ -629,8 +676,13 @@ export function BeltScreen({
   };
 
   const handleModalClose = (allCorrect: boolean) => {
+    const m = modal;
     setModal(null);
     if (allCorrect) {
+      if (m) {
+        markItemSeen(m.item.id);
+        incrementSortCount(m.item.id);
+      }
       setCorrect((c) => c + 1);
       bumpStreak();
     } else {
@@ -703,6 +755,7 @@ export function BeltScreen({
       playCorrect();
       addBurst(x, y);
       markItemSeen(def.id);
+      incrementSortCount(def.id);
       setCorrect((c) => c + 1);
       bumpStreak();
       setHint(null);
@@ -749,7 +802,34 @@ export function BeltScreen({
   const rackItems = sinkItems.filter((i) => i.status === "rack");
 
   // seasonal reskin v1: cooler backdrop while a season is live
-  const seasonActive = !!getActiveSeason();
+  const activeSeason = getActiveSeason();
+  const seasonActive = !!activeSeason;
+  const SEASON_ICONS: Record<string, any> = {
+    spring: ICON_SPRING,
+    summer: ICON_SUMMER,
+    fall: ICON_AUTUMN,
+    winter: ICON_WINTER,
+  };
+  const seasonIcon = activeSeason ? SEASON_ICONS[activeSeason.id] : null;
+
+  // Portland gets its own background
+  const isPortland = (Array.isArray(regionId) ? regionId : [regionId]).includes(
+    "portland",
+  );
+
+  // "PORTLAND — MON" -> "Monday Shift"; "ENDLESS" stays as-is
+  const titleParts = title.split(" — ");
+  const DAY_FULL: Record<string, string> = {
+    MON: "Monday",
+    TUE: "Tuesday",
+    WED: "Wednesday",
+    THU: "Thursday",
+    FRI: "Friday",
+  };
+  const shiftDayLabel =
+    titleParts.length === 2
+      ? `${DAY_FULL[titleParts[1]] ?? titleParts[1]} Shift`
+      : titleParts[0];
 
   if (!pool) {
     return (
@@ -761,32 +841,79 @@ export function BeltScreen({
 
   return (
     <View style={[styles.root, seasonActive && styles.winterRoot]}>
-      {/* HUD */}
-      <View style={styles.hud}>
-        <View>
-          <Text style={styles.hudTitle}>
-            {seasonActive ? "❄ " : ""}
-            {title}
-          </Text>
-          <Text style={styles.hudSub}>
-            {endless ? `score ${correct}` : `${resolved}/${SHIFT_ITEMS} sorted`}
+      {/* Portland background (lowest layer) */}
+      {isPortland && (
+        <ImageBackground
+          source={PORTLAND_BG}
+          style={{ position: "absolute", left: 0, right: 0, top: 0, bottom: 0 }}
+          resizeMode="cover"
+        />
+      )}
+      {/* top row: lifetime numbers + pause */}
+      <View style={styles.topRow}>
+        <View style={styles.lifetimeHud}>
+          <LifetimeHud />
+        </View>
+        <Pressable
+          onPress={() => setUserPaused(true)}
+          hitSlop={10}
+          style={styles.pauseBtn}
+        >
+          <Image
+            source={ICON_PAUSE}
+            style={styles.pauseIcon}
+            resizeMode="contain"
+          />
+        </Pressable>
+      </View>
+      {/* shift HUD (bottom block) */}
+      <View style={styles.shiftBlock}>
+        <View style={[styles.paperPill, styles.titlePill]}>
+          {seasonIcon && (
+            <Image
+              source={seasonIcon}
+              style={styles.seasonIcon}
+              resizeMode="contain"
+            />
+          )}
+          <Text
+            style={styles.shiftTitle}
+            numberOfLines={1}
+            adjustsFontSizeToFit
+          >
+            {shiftDayLabel}
           </Text>
         </View>
-        <View style={styles.streakWrap}>
-          <Text style={styles.streak}>
-            {endless
-              ? "❤".repeat(Math.max(0, lives))
-              : streak > 1
-                ? `🔥 ×${streak}`
-                : " "}
+        <View style={[styles.paperPill, styles.statPill, styles.sortedPill]}>
+          <Text style={styles.statText} numberOfLines={1} adjustsFontSizeToFit>
+            {endless ? (
+              <>
+                <Text style={styles.statLabel}>score </Text>
+                {correct}
+              </>
+            ) : (
+              <>
+                {resolved}/{SHIFT_ITEMS}
+                <Text style={styles.statLabel}> items</Text>
+              </>
+            )}
           </Text>
-          <Pressable
-            onPress={() => setUserPaused(true)}
-            hitSlop={10}
-            style={styles.pauseBtn}
-          >
-            <Text style={styles.pauseGlyph}>⏸</Text>
-          </Pressable>
+        </View>
+        <View style={[styles.paperPill, styles.statPill, styles.streakPill]}>
+          {endless ? (
+            <Text style={styles.statText} numberOfLines={1}>
+              {"❤".repeat(Math.max(0, lives))}
+            </Text>
+          ) : (
+            <>
+              <Image
+                source={ICON_STREAK}
+                style={styles.streakIcon}
+                resizeMode="contain"
+              />
+              <Text style={styles.statText}>×{streak}</Text>
+            </>
+          )}
         </View>
       </View>
       {(hint || waitingOnSink) && (
@@ -795,6 +922,18 @@ export function BeltScreen({
         </Text>
       )}
 
+      {/* table texture below the belt's visual bottom (belt.png has transparent padding; visual content ends at ~462pt) */}
+      <Image
+        source={TABLE_IMG}
+        style={{
+          position: "absolute",
+          left: 0,
+          right: 0,
+          top: 440,
+          bottom: 0,
+        }}
+        resizeMode="cover"
+      />
       {/* belt: single texture + rumble */}
       <Animated.View
         style={[
@@ -819,6 +958,18 @@ export function BeltScreen({
         pointerEvents="none"
       />
 
+      {/* work area art backdrops (sink + prep tray) */}
+      <Image
+        source={SINK_IMG}
+        style={[zoneStyle(SINK_RECT), styles.artShadow]}
+        resizeMode="contain"
+      />
+      <Image
+        source={TRAY_IMG}
+        style={[zoneStyle(TRAY_RECT), styles.artShadow]}
+        resizeMode="contain"
+      />
+
       {/* items */}
       {items.map((it) => (
         <BeltItem
@@ -841,27 +992,14 @@ export function BeltScreen({
         />
       ))}
 
-      {/* prep drop zone */}
-      <View
-        style={[
-          styles.prep,
-          { left: PREP.x, top: PREP.y, width: PREP.w, height: PREP.h },
-        ]}
-        pointerEvents="none"
-      >
-        <Text style={styles.prepLabel}>PREP</Text>
-        <Text style={styles.prepSub}>bottles go here</Text>
-      </View>
-
-      {/* rinse sink: big FIFO basin + clean rack on the side (cap 4) */}
+      {/* rinse sink renders on the sink section */}
       <SinkBasin
         items={sinkItems}
         onRinseDone={handleRinseDone}
         paused={userPaused}
       />
-      <Text style={[styles.rackLabel, { left: RACK.x, top: RACK.y + 4 }]}>
-        CLEAN
-      </Text>
+
+      {/* rack slots render on the drying-rack section */}
       {[0, 1, 2, 3].map((i) => (
         <RackSlot
           key={i}
@@ -878,7 +1016,7 @@ export function BeltScreen({
           <View key={b.id} style={styles.bin}>
             <Image
               source={BIN_SPRITES[b.id]}
-              style={{ width: BIN_W, height: BIN_H }}
+              style={[{ width: BIN_W, height: BIN_H }, styles.artShadow]}
               resizeMode="contain"
             />
           </View>
@@ -907,20 +1045,22 @@ export function BeltScreen({
       {userPaused && (
         <View style={styles.pauseOverlay}>
           <View style={styles.pauseCard}>
-            <Text style={styles.pauseTitle}>Paused</Text>
             <Pressable
               onPress={() => setUserPaused(false)}
-              style={styles.pauseAction}
+              style={styles.pauseButton}
             >
-              <Text style={styles.pauseActionText}>Resume</Text>
+              <Image
+                source={ICON_RESUME}
+                style={styles.pauseButtonImg}
+                resizeMode="contain"
+              />
             </Pressable>
-            <Pressable
-              onPress={doQuit}
-              style={[styles.pauseAction, styles.quitAction]}
-            >
-              <Text style={[styles.pauseActionText, styles.quitText]}>
-                Quit shift
-              </Text>
+            <Pressable onPress={doQuit} style={styles.pauseButton}>
+              <Image
+                source={ICON_QUIT}
+                style={styles.pauseButtonImg}
+                resizeMode="contain"
+              />
             </Pressable>
           </View>
         </View>
@@ -930,50 +1070,90 @@ export function BeltScreen({
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: C.bg },
+  root: { flex: 1, paddingTop: 60, paddingHorizontal: 32 },
+  artShadow: {
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.25,
+    shadowRadius: 8,
+  },
   winterRoot: { backgroundColor: "#EDF1F6" },
   loadingWrap: { justifyContent: "center", alignItems: "center" },
   loading: { fontSize: 17, fontWeight: "700", color: C.sub },
-  hud: {
-    paddingTop: 64,
-    paddingHorizontal: 24,
+  topRow: {
     flexDirection: "row",
     justifyContent: "space-between",
-    alignItems: "flex-start",
-  },
-  hudTitle: { fontSize: 22, fontWeight: "800", color: C.ink, letterSpacing: 3 },
-  hudSub: { fontSize: 13, color: C.sub, marginTop: 2 },
-  streakWrap: { minWidth: 80, alignItems: "flex-end" },
-  streak: { fontSize: 20, fontWeight: "800", color: C.ink },
-  pauseBtn: {
-    marginTop: 6,
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: "#FFFDF8",
-    justifyContent: "center",
     alignItems: "center",
-    shadowColor: "#000",
-    shadowOpacity: 0.08,
-    shadowRadius: 6,
-    shadowOffset: { width: 0, height: 2 },
+    marginBottom: 2,
   },
-  pauseGlyph: { fontSize: 18, color: C.sub },
+  lifetimeHud: {
+    height: 36,
+    justifyContent: "center",
+  },
+  pauseBtn: {
+    padding: 4,
+  },
+  pauseIcon: { width: 42, height: 42 },
+  shiftBlock: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
+    marginBottom: 8,
+  },
+  paperPill: {
+    backgroundColor: palette.cream,
+    borderWidth: 2,
+    borderColor: palette.bark,
+    borderRadius: 14,
+    paddingHorizontal: 12,
+    paddingVertical: 5,
+  },
+  titlePill: {
+    flexDirection: "row",
+    alignItems: "center",
+    height: 32,
+  },
+  seasonIcon: { width: 22, height: 22, marginRight: 8 },
+  shiftTitle: {
+    fontSize: 14,
+    fontWeight: "600",
+    color: palette.bark,
+  },
+  statPill: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    height: 32,
+  },
+  sortedPill: {
+    width: 112,
+    marginLeft: "auto",
+  },
+  streakPill: {
+    width: 80,
+  },
+  statText: {
+    fontSize: 13,
+    fontWeight: "700",
+    color: palette.bark,
+  },
+  statLabel: {
+    fontWeight: "600",
+  },
+  streakIcon: { width: 20, height: 20, marginRight: 6 },
   pauseOverlay: {
     position: "absolute",
     left: 0,
     right: 0,
-    top: 0,
+    top: -90,
     bottom: 0,
-    backgroundColor: "rgba(46,42,38,0.45)",
+    backgroundColor: "rgba(0, 0, 0, 0.45)",
     justifyContent: "center",
     alignItems: "center",
     zIndex: 50,
   },
   pauseCard: {
-    backgroundColor: "#FFFDF8",
     borderRadius: 20,
-    padding: 28,
     width: 240,
     alignItems: "center",
     shadowColor: "#000",
@@ -981,23 +1161,13 @@ const styles = StyleSheet.create({
     shadowRadius: 16,
     shadowOffset: { width: 0, height: 6 },
   },
-  pauseTitle: {
-    fontSize: 24,
-    fontWeight: "900",
-    color: C.ink,
-    marginBottom: 18,
+  pauseButton: {
+    marginTop: 1,
   },
-  pauseAction: {
-    backgroundColor: C.belt,
-    borderRadius: 14,
-    paddingVertical: 12,
-    width: "100%",
-    alignItems: "center",
-    marginTop: 10,
+  pauseButtonImg: {
+    width: 180,
+    height: 180,
   },
-  pauseActionText: { fontSize: 17, fontWeight: "800", color: "#FFFDF8" },
-  quitAction: { backgroundColor: "#F3E9D8" },
-  quitText: { color: C.sub },
   hint: {
     textAlign: "center",
     marginTop: 10,
@@ -1054,30 +1224,6 @@ const styles = StyleSheet.create({
     paddingVertical: 2,
     borderRadius: 6,
     overflow: "hidden",
-  },
-  prep: {
-    position: "absolute",
-    borderWidth: 2,
-    borderStyle: "dashed",
-    borderColor: "#B9A88F",
-    borderRadius: 16,
-    backgroundColor: "rgba(232,161,61,0.08)",
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  prepLabel: {
-    fontSize: 15,
-    fontWeight: "800",
-    letterSpacing: 4,
-    color: "#A08C6D",
-  },
-  prepSub: { fontSize: 11, color: "#A08C6D", marginTop: 2 },
-  rackLabel: {
-    position: "absolute",
-    fontSize: 11,
-    fontWeight: "800",
-    letterSpacing: 3,
-    color: "#8FAE8B",
   },
   bins: {
     position: "absolute",

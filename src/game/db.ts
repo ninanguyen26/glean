@@ -12,7 +12,7 @@ declare const require: any;
 
 const SEED: GameItem[] = require('../../data/seed/items.json').items;
 const REGION_SEED: RegionDef[] = require('../../data/seed/regions.json').regions;
-const DB_VERSION = 6;
+const DB_VERSION = 8;
 
 export interface SeasonItemSeed {
   id: string;
@@ -87,6 +87,7 @@ function ensureSeeded(db: any) {
       ts INTEGER NOT NULL
     );
     CREATE TABLE IF NOT EXISTS seen_items (item_id TEXT PRIMARY KEY, ts INTEGER);
+    CREATE TABLE IF NOT EXISTS item_sort_counts (item_id TEXT PRIMARY KEY, sorts INTEGER NOT NULL DEFAULT 0);
     CREATE TABLE IF NOT EXISTS player_profile (
       id INTEGER PRIMARY KEY CHECK (id = 1),
       cash INTEGER NOT NULL DEFAULT 0,
@@ -366,6 +367,7 @@ export async function loadSeasonalItems(seasonId: string): Promise<GameItem[]> {
 
 // in-memory fallbacks until the native SQLite module is present
 const memSeen = new Set<string>();
+const memSortCounts: Record<string, number> = {};
 const memPity: Record<string, number> = {};
 
 export function markItemSeen(itemId: string) {
@@ -383,6 +385,29 @@ export function getSeenItemIds(): string[] {
   if (!db) return [...memSeen];
   ensureSeeded(db);
   return (db.getAllSync('SELECT item_id FROM seen_items') as any[]).map((r) => r.item_id);
+}
+
+/** Per-item correct-sort count, for the album's field-guide modal. */
+export function incrementSortCount(itemId: string) {
+  const db = openDb();
+  if (!db) {
+    memSortCounts[itemId] = (memSortCounts[itemId] ?? 0) + 1;
+    return;
+  }
+  ensureSeeded(db);
+  db.runSync(
+    'INSERT INTO item_sort_counts (item_id, sorts) VALUES (?, 1) ON CONFLICT(item_id) DO UPDATE SET sorts = sorts + 1',
+    [itemId],
+  );
+}
+
+/** Correct-sort count for one item (0 when never sorted). */
+export function getSortCount(itemId: string): number {
+  const db = openDb();
+  if (!db) return memSortCounts[itemId] ?? 0;
+  ensureSeeded(db);
+  const row: any = db.getFirstSync('SELECT sorts FROM item_sort_counts WHERE item_id = ?', [itemId]);
+  return row ? row.sorts : 0;
 }
 
 const pityKey = (seasonId: string) => `pity_${seasonId}`;
@@ -458,18 +483,10 @@ export function getXP(): number {
   return row ? row.xp : 0;
 }
 
-/** Level from cumulative XP: L1 0-199, L2 200-599, L3 600-1199, ... (200 x level). */
+/** Level from cumulative XP: flat 1000 XP per level (L1 0-999, L2 1000-1999, ...). */
 export function getLevel(xp?: number): number {
   const total = xp ?? getXP();
-  let level = 1;
-  let threshold = 200;
-  let cumulative = 0;
-  while (total >= cumulative + threshold) {
-    cumulative += threshold;
-    level += 1;
-    threshold += 200;
-  }
-  return level;
+  return Math.floor(total / 1000) + 1;
 }
 
 export function addCash(n: number): number {

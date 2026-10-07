@@ -51,7 +51,7 @@ import {
  * Landfill, body -> Recycle.
  */
 
-const TWIST_TARGET = Math.PI * 1.25;
+const TWIST_TARGET = Math.PI * 0.95;
 const PEEL_DIST = 150;
 
 type PartId = "cap" | "wrapper" | "body";
@@ -472,7 +472,7 @@ export function DisassemblyModal({
               style={[
                 {
                   position: "absolute",
-                  left: SW - 235,
+                  left: SW - 200,
                   top: BY + 125,
                   width: CAP_W,
                   height: CAP_H,

@@ -20,7 +20,14 @@ import { C } from "../spike/effects";
 import { DAY_LABELS } from "./db";
 import { tapFeedback } from "./feel";
 import { BINS, RegionDef } from "./items";
-import { BIN_SPRITES, ICON_RULEBOOK, ICON_START, PORTLAND_BG } from "./sprites";
+import { LifetimeHud } from "./LifetimeHud";
+import {
+  BIN_SPRITES,
+  ICON_BACK,
+  ICON_RULEBOOK,
+  ICON_START,
+  PORTLAND_BG,
+} from "./sprites";
 
 /* Phase 6: pre-shift rules card — streams, house rules, then start. */
 
@@ -65,9 +72,18 @@ export function RulesScreen({
 
   const body = (
     <>
-      <Pressable onPress={onBack} style={styles.back}>
-        <Text style={styles.backText}>‹ Map</Text>
-      </Pressable>
+      <View style={styles.topRow}>
+        <Pressable onPress={onBack} style={styles.back} hitSlop={10}>
+          <Image
+            source={ICON_BACK}
+            style={styles.backIcon}
+            resizeMode="contain"
+          />
+        </Pressable>
+        <View style={styles.lifetimeHud}>
+          <LifetimeHud />
+        </View>
+      </View>
       <Text style={styles.kicker}>{DAY_LABELS[day - 1]} SHIFT</Text>
       <Text style={styles.city}>{region.name}</Text>
       <Text style={styles.blurb}>{region.blurb}</Text>
@@ -148,9 +164,19 @@ export function RulesScreen({
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1, paddingTop: 72, paddingHorizontal: 32 },
-  back: { marginBottom: 18 },
-  backText: { fontSize: 16, fontWeight: "700", color: C.sub },
+  root: { flex: 1, paddingTop: 60, paddingHorizontal: 32 },
+  topRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 14,
+  },
+  lifetimeHud: {
+    height: 36,
+    justifyContent: "center",
+  },
+  back: { padding: 4 },
+  backIcon: { width: 42, height: 42 },
   kicker: { fontSize: 13, fontWeight: "700", letterSpacing: 3, color: C.sub },
   city: { fontSize: 38, fontWeight: "900", color: C.ink, marginTop: 4 },
   blurb: { fontSize: 15, color: C.sub, fontStyle: "italic", marginTop: 6 },
@@ -192,11 +218,13 @@ const styles = StyleSheet.create({
     borderRadius: 32,
     backgroundColor: palette.sand,
     borderWidth: 2,
+    paddingTop: 18,
     borderColor: palette.bark,
+    overflow: "hidden",
     alignItems: "center",
     justifyContent: "center",
   },
-  binImage: { width: 48, height: 48 },
+  binImage: { width: 65, height: 65 },
   streamText: { flex: 1 },
   streamName: { fontSize: 16, fontWeight: "800", color: C.ink },
   streamItems: {

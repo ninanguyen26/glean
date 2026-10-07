@@ -14,11 +14,11 @@ import Animated, {
   withSequence,
   withTiming,
 } from "react-native-reanimated";
-import { palette } from "../constants/theme";
-import { getCash, getLevel } from "./db";
-import { HOME_BG, ICON_ALBUM, ICON_MAP, ICON_PLAY } from "./sprites";
-import { tapFeedback } from "./feel";
 import { playTap } from "../audio/sounds";
+import { palette } from "../constants/theme";
+import { LifetimeHud } from "./LifetimeHud";
+import { tapFeedback } from "./feel";
+import { HOME_BG, ICON_ALBUM, ICON_MAP, ICON_PLAY } from "./sprites";
 
 /* Home: MRF background, HUD on top, play icon bottom-center,
    map/album as edge buttons growing out of the right side. */
@@ -32,9 +32,6 @@ export function HomeScreen({
   onMap: () => void;
   onAlbum: () => void;
 }) {
-  const cash = getCash();
-  const level = getLevel();
-
   // breathing scale for the play button
   const scale = useSharedValue(1);
   useEffect(() => {
@@ -54,12 +51,7 @@ export function HomeScreen({
   return (
     <ImageBackground source={HOME_BG} style={styles.root} resizeMode="cover">
       <View style={styles.hud}>
-        <View style={styles.hudPill}>
-          <Text style={styles.hudText}>Lv {level}</Text>
-        </View>
-        <View style={styles.hudPill}>
-          <Text style={styles.hudText}>${cash}</Text>
-        </View>
+        <LifetimeHud />
       </View>
 
       <View style={styles.spacer} />
@@ -112,19 +104,10 @@ export function HomeScreen({
 const styles = StyleSheet.create({
   root: { flex: 1 },
   hud: {
-    flexDirection: "row",
-    justifyContent: "center",
-    gap: 12,
-    paddingTop: 64,
+    alignItems: "center",
+    paddingTop: 60,
     paddingHorizontal: 20,
   },
-  hudPill: {
-    backgroundColor: "rgba(46,42,38,0.75)",
-    borderRadius: 20,
-    paddingHorizontal: 18,
-    paddingVertical: 10,
-  },
-  hudText: { color: "#FFFDF8", fontWeight: "800", fontSize: 15 },
   spacer: { flex: 1 },
   bottomRow: {
     flexDirection: "row",

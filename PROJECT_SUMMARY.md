@@ -14,9 +14,9 @@
 ### Progression
 - 5-day workweek per city (Mon–Fri)
 - Stars per shift (1–3 based on accuracy) unlock the next day and new cities
-- XP per correct sort → player levels (200×level thresholds)
+- XP per correct sort → player levels (flat 1000 XP per level)
 - Cash per shift: $20 base (50%+ accuracy only) + $2/correct + streak bonuses
-- Streak bonuses: 5/10/15 streak = +$5/$8/$10 + 5 XP each; 20 streak = +$15 + 15 XP
+- Streak bonuses: 5/10/15 streak = +$5/$8/$10 + 5 XP each; Perfect shift (20 streak) = +$15 + 15 XP
 - 3 Tier-1 cities: Portland → Toronto → UK (8/15 star unlocks)
 - Cash is banked for v2 (shop/upgrades); v1 is earn-only
 
@@ -98,6 +98,9 @@
 - [ ] Audio (synthesized in-house, Librarian pipeline)
 - [ ] Difficulty tuning
 - [ ] OTA update verification
+
+### Deferred (until all items are finished)
+- **Fun facts per item**: add a `funFact` field to the item seeds (~130 items: universals + cities + seasons).
 
 ### Future (v2)
 - Cash spending (shop/upgrades)

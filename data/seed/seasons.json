@@ -11,13 +11,13 @@
       "items": [
         {"id":"daffodil-stems","name":"Daffodil stems","bin":"compost","color":"#7A9A5B","shape":"rect","rarity":"common"},
         {"id":"seed-packet","name":"Seed packet","bin":"recycle","color":"#C9A06B","shape":"rect","rarity":"common"},
-        {"id":"plant-tag","name":"Plastic plant tag","bin":"landfill","color":"#E8E4DA","shape":"rect","rarity":"common"},
-        {"id":"soil-bag","name":"Potting soil bag","bin":"landfill","color":"#5A4A3A","shape":"rect","rarity":"common"},
+        {"id":"plant-tag","name":"Plant tag","bin":"landfill","color":"#E8E4DA","shape":"rect","rarity":"common"},
+        {"id":"soil-bag","name":"Soil bag","bin":"landfill","color":"#5A4A3A","shape":"rect","rarity":"common"},
         {"id":"broken-trowel","name":"Broken trowel","bin":"landfill","color":"#9AA3A8","shape":"rect","rarity":"uncommon"},
         {"id":"fertilizer-bag","name":"Fertilizer bag","bin":"landfill","color":"#7A5230","shape":"rect","rarity":"uncommon","teaching":"Multi-layer plastic — landfill."},
         {"id":"spring-flyer","name":"Spring flyer","bin":"recycle","color":"#E8E4DA","shape":"rect","rarity":"uncommon"},
-        {"id":"easter-grass","name":"Plastic easter grass","bin":"landfill","color":"#A8B86B","shape":"diamond","rarity":"rare","teaching":"Tanglers jam the line."},
-        {"id":"cracked-pot","name":"Cracked terracotta pot","bin":"landfill","color":"#A85F4B","shape":"circle","rarity":"rare","teaching":"Terracotta isn't recyclable."}
+        {"id":"easter-grass","name":"Easter grass","bin":"landfill","color":"#A8B86B","shape":"diamond","rarity":"rare","teaching":"Tanglers jam the line."},
+        {"id":"cracked-pot","name":"Terracotta pot","bin":"landfill","color":"#A85F4B","shape":"circle","rarity":"rare","teaching":"Terracotta isn't recyclable."}
       ]
     },
     {
@@ -31,13 +31,13 @@
       "items": [
         {"id":"popsicle-stick","name":"Popsicle stick","bin":"compost","color":"#C9A06B","shape":"rect","rarity":"common"},
         {"id":"sunscreen-bottle","name":"Sunscreen bottle","bin":"recycle","color":"#E8C53D","shape":"rect","rarity":"common"},
-        {"id":"ice-cream-tub","name":"Ice cream tub","bin":"recycle","color":"#EDEAE2","shape":"circle","rarity":"common"},
+        {"id":"ice-cream-tub","name":"Gelato tub","bin":"recycle","color":"#EDEAE2","shape":"circle","rarity":"common"},
         {"id":"paper-plate","name":"Paper plate","bin":"compost","color":"#F0E8D8","shape":"circle","rarity":"common","teaching":"Greasy — compost, don't recycle."},
         {"id":"solo-cup","name":"Solo cup","bin":"landfill","color":"#D95F4B","shape":"circle","rarity":"uncommon","teaching":"Cups are plastic-lined — landfill."},
         {"id":"glow-stick","name":"Glow stick","bin":"landfill","color":"#A8B86B","shape":"rect","rarity":"uncommon"},
-        {"id":"wax-paper","name":"Wax paper","bin":"landfill","color":"#EDE4D2","shape":"rect","rarity":"uncommon"},
-        {"id":"pool-noodle","name":"Pool noodle chunk","bin":"landfill","color":"#7FB3D5","shape":"circle","rarity":"rare"},
-        {"id":"candle-tin","name":"Citronella candle tin","bin":"landfill","color":"#E8A13D","shape":"circle","rarity":"rare"}
+        {"id":"wax-paper","name":"Wax paper","bin":"landfill","color":"#EDEAE2","shape":"rect","rarity":"uncommon"},
+        {"id":"pool-noodle","name":"Pool noodle","bin":"landfill","color":"#7FB3D5","shape":"circle","rarity":"rare"},
+        {"id":"candle-tin","name":"Candle tin","bin":"landfill","color":"#E8A13D","shape":"circle","rarity":"rare"}
       ]
     },
     {
@@ -51,16 +51,16 @@
       "items": [
         {"id":"acorn","name":"Acorn","bin":"compost","color":"#7A5230","shape":"circle","rarity":"common"},
         {"id":"pumpkin-guts","name":"Pumpkin guts","bin":"compost","color":"#E8913D","shape":"circle","rarity":"common"},
-        {"id":"pumpkin-pie","name":"Pumpkin pie slice","bin":"compost","color":"#D96F2B","shape":"circle","rarity":"common"},
+        {"id":"pumpkin-pie","name":"Pie slice","bin":"compost","color":"#D96F2B","shape":"circle","rarity":"common"},
         {"id":"mini-gourd","name":"Mini gourd","bin":"compost","color":"#E8C53D","shape":"circle","rarity":"common"},
         {"id":"candy-wrappers","name":"Candy wrappers","bin":"landfill","color":"#B57EDC","shape":"diamond","rarity":"common","teaching":"Foil-lined — landfill."},
         {"id":"halloween-mask","name":"Pumpkin mask","bin":"landfill","color":"#D95F4B","shape":"diamond","rarity":"common","teaching":"Costume masks are PVC — landfill."},
         {"id":"cider-jug","name":"Cider jug","bin":"recycle","color":"#C9A06B","shape":"rect","rarity":"common","needsRinse":true,"teaching":"Rinse first — residue contaminates the batch."},
-        {"id":"mini-gourd-1","name":"Rotten mini gourd","bin":"compost","color":"#8A6A3A","shape":"circle","rarity":"uncommon"},
+        {"id":"mini-gourd-1","name":"Rotten gourd","bin":"compost","color":"#8A6A3A","shape":"circle","rarity":"uncommon"},
         {"id":"halloween-mask-1","name":"Monster mask","bin":"landfill","color":"#9AB86B","shape":"diamond","rarity":"uncommon","teaching":"Costume masks are PVC — landfill."},
-        {"id":"fake-web","name":"Fake spider web","bin":"landfill","color":"#EDEAE2","shape":"diamond","rarity":"uncommon","teaching":"Tanglers jam the line."},
-        {"id":"aluminum-pie-tin","name":"Aluminum pie tin","bin":"recycle","color":"#C9CDD1","shape":"circle","rarity":"uncommon","needsRinse":true,"teaching":"Rinse it — aluminum recycles forever."},
-        {"id":"cracked-bucket","name":"Cracked candy bucket","bin":"landfill","color":"#E07B2F","shape":"circle","rarity":"uncommon","teaching":"Cracked plastic can't be reclaimed — landfill."},
+        {"id":"fake-web","name":"Spider web","bin":"landfill","color":"#EDEAE2","shape":"diamond","rarity":"uncommon","teaching":"Tanglers jam the line."},
+        {"id":"aluminum-pie-tin","name":"Pie tin","bin":"recycle","color":"#C9CDD1","shape":"circle","rarity":"uncommon","needsRinse":true,"teaching":"Rinse it — aluminum recycles forever."},
+        {"id":"cracked-bucket","name":"Candy bucket","bin":"landfill","color":"#E07B2F","shape":"circle","rarity":"uncommon","teaching":"Cracked plastic can't be reclaimed — landfill."},
         {"id":"broken-rake","name":"Broken rake","bin":"landfill","color":"#9AA3A8","shape":"rect","rarity":"rare"},
         {"id":"turkey-bone","name":"Turkey bone","bin":"compost","color":"#EDE4D2","shape":"rect","rarity":"rare","teaching":"Bones never recycle."},
         {"id":"dead-mums","name":"Dead mums","bin":"landfill","color":"#4A4A52","shape":"rect","rarity":"rare","teaching":"Black plastic hides from the sorters — landfill."}
@@ -78,12 +78,12 @@
         {"id":"pine-needles","name":"Pine needles","bin":"compost","color":"#3E5A3E","shape":"circle","rarity":"common"},
         {"id":"holiday-card","name":"Holiday card","bin":"recycle","color":"#E8735A","shape":"rect","rarity":"common"},
         {"id":"chestnut-shells","name":"Chestnut shells","bin":"compost","color":"#7A5230","shape":"circle","rarity":"common"},
-        {"id":"wrap-tube","name":"Wrapping paper tube","bin":"recycle","color":"#C9A06B","shape":"rect","rarity":"common"},
-        {"id":"gift-wrap","name":"Foil gift wrap","bin":"landfill","color":"#D95F4B","shape":"rect","rarity":"uncommon","teaching":"Foil gift wrap can't be recycled."},
+        {"id":"wrap-tube","name":"Wrap tube","bin":"recycle","color":"#C9A06B","shape":"rect","rarity":"common"},
+        {"id":"gift-wrap","name":"Gift wrap","bin":"landfill","color":"#D95F4B","shape":"rect","rarity":"uncommon","teaching":"Foil gift wrap can't be recycled."},
         {"id":"ribbon","name":"Ribbon","bin":"landfill","color":"#E8A13D","shape":"diamond","rarity":"uncommon"},
         {"id":"eggnog-carton","name":"Eggnog carton","bin":"recycle","color":"#EDEAE2","shape":"rect","rarity":"uncommon"},
         {"id":"broken-ornament","name":"Broken ornament","bin":"landfill","color":"#D95F4B","shape":"diamond","rarity":"rare"},
-        {"id":"string-lights","name":"Dead string lights","bin":"landfill","color":"#E8C53D","shape":"circle","rarity":"rare","teaching":"Tanglers jam the line."}
+        {"id":"string-lights","name":"String lights","bin":"landfill","color":"#E8C53D","shape":"circle","rarity":"rare","teaching":"Tanglers jam the line."}
       ]
     }
   ]

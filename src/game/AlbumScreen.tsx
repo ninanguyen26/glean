@@ -203,7 +203,11 @@ export function AlbumScreen({ onBack }: { onBack: () => void }) {
             },
           ]}
         >
-          <Text style={[styles.tabText, { fontSize: 20, color: palette.cream }]}>✕</Text>
+          <Text
+            style={[styles.tabText, { fontSize: 20, color: palette.cream }]}
+          >
+            ✕
+          </Text>
         </Pressable>
       </View>
       <View style={[styles.card, { width: cardWidth, height: dh * 0.58 }]}>
@@ -378,7 +382,7 @@ const styles = StyleSheet.create({
     backgroundColor: palette.oat,
     borderRadius: 14,
     paddingVertical: 8,
-    paddingHorizontal: 6,
+    paddingHorizontal: 8,
     alignItems: "center",
     justifyContent: "space-between",
     overflow: "hidden",
@@ -390,8 +394,8 @@ const styles = StyleSheet.create({
     marginBottom: 2,
   },
   name: {
-    fontSize: 11,
-    fontWeight: "700",
+    fontSize: 10,
+    fontWeight: "600",
     color: palette.bark,
     textAlign: "center",
     marginTop: 6,

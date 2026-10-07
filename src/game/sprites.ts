@@ -15,6 +15,16 @@ export const ITEM_SPRITES: Record<string, any> = {
   'alu-can': require('../../assets/sprites/soda-can.png'),
   bottle: require('../../assets/sprites/bottle-whole.png'),
   'bottle-red': require('../../assets/sprites/bottle-whole-1.png'),
+  eggshells: require('../../assets/sprites/eggshells.png'),
+  'coffee-grounds': require('../../assets/sprites/coffee-grounds.png'),
+  leaves: require('../../assets/sprites/leaves.png'),
+  'office-paper': require('../../assets/sprites/office-paper.png'),
+  'tin-can': require('../../assets/sprites/tin-can.png'),
+  'foam-cup': require('../../assets/sprites/foam-cup.png'),
+  'chip-bag': require('../../assets/sprites/chip-bag.png'),
+  'cig-butt': require('../../assets/sprites/cig-butt.png'),
+  'cig-butts': require('../../assets/sprites/cig-butts.png'),
+  'broken-pen': require('../../assets/sprites/broken-pen.png'),
   // fall seasonal (15 items, incl. the -1 pair entries)
   acorn: require('../../assets/sprites/seasonal/fall/acorn.png'),
   'aluminum-pie-tin': require('../../assets/sprites/seasonal/fall/aluminum-pie-tin.png'),
@@ -50,6 +60,17 @@ export const ICON_MAP = require('../../assets/icons/map.png');
 export const ICON_PLAY = require('../../assets/icons/play.png');
 export const ICON_START = require('../../assets/icons/start.png');
 export const ICON_RULEBOOK = require('../../assets/icons/rulebook-icon.png');
+export const ICON_COIN = require('../../assets/icons/coin-icon.png');
+export const ICON_STAR = require('../../assets/icons/star-icon.png');
+export const ICON_BACK = require('../../assets/icons/back-icon.png');
+export const ICON_PAUSE = require('../../assets/icons/pause-icon.png');
+export const ICON_STREAK = require('../../assets/icons/streak-icon.png');
+export const ICON_SPRING = require('../../assets/icons/spring.png');
+export const ICON_SUMMER = require('../../assets/icons/summer.png');
+export const ICON_AUTUMN = require('../../assets/icons/autumn.png');
+export const ICON_WINTER = require('../../assets/icons/winter.png');
+export const ICON_RESUME = require('../../assets/icons/resume.png');
+export const ICON_QUIT = require('../../assets/icons/quit.png');
 
 // disassembly modal layers: blue bottle
 export const BOTTLE_BODY = require('../../assets/sprites/bottle-body.png');
