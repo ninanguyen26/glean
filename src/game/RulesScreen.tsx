@@ -95,7 +95,15 @@ export function RulesScreen({
           <View style={styles.lifetimeHud}>
             <LifetimeHud />
           </View>
-          <Pressable onPress={onBack} style={styles.back} hitSlop={10}>
+          <Pressable
+            onPress={() => {
+              tapFeedback();
+              playTap();
+              onBack();
+            }}
+            style={styles.back}
+            hitSlop={10}
+          >
             <Image
               source={ICON_BACK}
               style={styles.backIcon}

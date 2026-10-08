@@ -10,9 +10,13 @@ import { GameItem, RegionDef } from './items';
 
 declare const require: any;
 
-const SEED: GameItem[] = require('../../data/seed/items.json').items;
+const FUN_FACTS: Record<string, string> = require('../../data/seed/fun-facts.json');
+const SEED: GameItem[] = require('../../data/seed/items.json').items.map((it: any) => ({
+  ...it,
+  funFact: FUN_FACTS[it.id] ?? undefined,
+}));
 const REGION_SEED: RegionDef[] = require('../../data/seed/regions.json').regions;
-const DB_VERSION = 12;
+const DB_VERSION = 18;
 
 export interface SeasonItemSeed {
   id: string;
@@ -73,6 +77,7 @@ function ensureSeeded(db: any) {
       signature INTEGER NOT NULL DEFAULT 0,
       tricky INTEGER NOT NULL DEFAULT 0,
       teaching TEXT,
+      fun_fact TEXT,
       parts TEXT,
       season TEXT,
       rarity TEXT
@@ -88,6 +93,7 @@ function ensureSeeded(db: any) {
     );
     CREATE TABLE IF NOT EXISTS seen_items (item_id TEXT PRIMARY KEY, ts INTEGER);
     CREATE TABLE IF NOT EXISTS item_sort_counts (item_id TEXT PRIMARY KEY, sorts INTEGER NOT NULL DEFAULT 0);
+    CREATE TABLE IF NOT EXISTS claimed_milestones (item_id TEXT NOT NULL, tier INTEGER NOT NULL, PRIMARY KEY (item_id, tier));
     CREATE TABLE IF NOT EXISTS player_profile (
       id INTEGER PRIMARY KEY CHECK (id = 1),
       cash INTEGER NOT NULL DEFAULT 0,
@@ -101,6 +107,9 @@ function ensureSeeded(db: any) {
     db.execSync('ALTER TABLE items ADD COLUMN season TEXT');
     db.execSync('ALTER TABLE items ADD COLUMN rarity TEXT');
   }
+  if (!cols.some((c) => c.name === 'fun_fact')) {
+    db.execSync('ALTER TABLE items ADD COLUMN fun_fact TEXT');
+  }
   const row: any = db.getFirstSync('SELECT value FROM meta WHERE key = ?', ['items_version']);
   // 'found' used to mean spawned; now it means sorted correctly — wipe once
   const seenFlag: any = db.getFirstSync('SELECT value FROM meta WHERE key = ?', ['seen_version']);
@@ -113,7 +122,7 @@ function ensureSeeded(db: any) {
     db.runSync('DELETE FROM items');
     for (const it of SEED) {
       db.runSync(
-        'INSERT INTO items (id, region, name, bin, color, shape, complex, mechanic, needs_rinse, signature, tricky, teaching, parts, season, rarity) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+        'INSERT INTO items (id, region, name, bin, color, shape, complex, mechanic, needs_rinse, signature, tricky, teaching, fun_fact, parts, season, rarity) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
         [
           it.id,
           it.region,
@@ -127,6 +136,7 @@ function ensureSeeded(db: any) {
           it.signature ? 1 : 0,
           it.tricky ? 1 : 0,
           it.teaching ?? null,
+          it.funFact ?? null,
           it.parts ? JSON.stringify(it.parts) : null,
           it.season ?? null,
           it.rarity ?? null,
@@ -136,8 +146,8 @@ function ensureSeeded(db: any) {
     for (const s of SEASON_SEED) {
       for (const it of s.items) {
         db.runSync(
-          'INSERT OR REPLACE INTO items (id, region, name, bin, color, shape, season, rarity, teaching, needs_rinse) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
-          [it.id, 'seasonal', it.name, it.bin, it.color, it.shape, s.id, it.rarity, it.teaching ?? null, it.needsRinse ? 1 : 0],
+          'INSERT OR REPLACE INTO items (id, region, name, bin, color, shape, season, rarity, teaching, fun_fact, needs_rinse) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+          [it.id, 'seasonal', it.name, it.bin, it.color, it.shape, s.id, it.rarity, it.teaching ?? null, FUN_FACTS[it.id] ?? null, it.needsRinse ? 1 : 0],
         );
       }
     }
@@ -162,6 +172,7 @@ function rowToItem(r: any): GameItem {
     signature: !!r.signature,
     tricky: !!r.tricky,
     teaching: r.teaching ?? undefined,
+    funFact: r.fun_fact ?? undefined,
     parts: r.parts ? JSON.parse(r.parts) : undefined,
     season: r.season ?? undefined,
     rarity: r.rarity ?? undefined,
@@ -186,6 +197,35 @@ export async function loadUnionItems(regionIds: string[]): Promise<GameItem[]> {
     regionIds,
   );
   return rows.map(rowToItem);
+}
+
+/* ---------------- settings (persisted in meta, memory fallback) ---------------- */
+
+const memSettings: Record<string, string> = {};
+
+export function getSetting(key: string): string | null {
+  if (memSettings[key] !== undefined) return memSettings[key];
+  const db = openDb();
+  if (!db) return null;
+  try {
+    ensureSeeded(db);
+    const row: any = db.getFirstSync("SELECT value FROM meta WHERE key = ?", [key]);
+    return row ? String(row.value) : null;
+  } catch {
+    return null;
+  }
+}
+
+export function setSetting(key: string, value: string) {
+  memSettings[key] = value;
+  const db = openDb();
+  if (!db) return;
+  try {
+    ensureSeeded(db);
+    db.runSync("INSERT OR REPLACE INTO meta (key, value) VALUES (?, ?)", [key, value]);
+  } catch {
+    // memory fallback keeps it for the session
+  }
 }
 
 /* ---------------- progression ---------------- */
@@ -362,7 +402,9 @@ export async function loadSeasonalItems(seasonId: string): Promise<GameItem[]> {
     }
   }
   const s = SEASON_SEED.find((x) => x.id === seasonId);
-  return (s?.items ?? []).map((it) => ({ ...it, region: 'seasonal', season: seasonId } as GameItem));
+  return (s?.items ?? []).map(
+    (it) => ({ ...it, region: 'seasonal', season: seasonId, funFact: FUN_FACTS[it.id] } as GameItem),
+  );
 }
 
 // in-memory fallbacks until the native SQLite module is present
@@ -408,6 +450,83 @@ export function getSortCount(itemId: string): number {
   ensureSeeded(db);
   const row: any = db.getFirstSync('SELECT sorts FROM item_sort_counts WHERE item_id = ?', [itemId]);
   return row ? row.sorts : 0;
+}
+
+/* ---------------- sort-count milestone rewards ---------------- */
+
+export const MILESTONE_TIERS = [10, 25, 50];
+
+const MILESTONE_AMOUNTS: Record<string, number[]> = {
+  common: [2, 5, 10],
+  uncommon: [3, 8, 15],
+  rare: [4, 10, 20],
+};
+
+/** Cash for each tier, by rarity (no-rarity/signature items count as common). */
+export function milestoneAmounts(rarity?: string): number[] {
+  return MILESTONE_AMOUNTS[rarity ?? 'common'] ?? MILESTONE_AMOUNTS.common;
+}
+
+const memClaimed: Record<string, number[]> = {};
+
+function readClaimed(): Record<string, number[]> {
+  const db = openDb();
+  if (!db) return memClaimed;
+  ensureSeeded(db);
+  const out: Record<string, number[]> = {};
+  for (const r of db.getAllSync('SELECT item_id, tier FROM claimed_milestones') as any[]) {
+    (out[r.item_id] ??= []).push(r.tier);
+  }
+  return out;
+}
+
+export function getClaimedTiers(itemId: string): number[] {
+  return readClaimed()[itemId] ?? [];
+}
+
+export function claimMilestoneTier(itemId: string, tier: number) {
+  const db = openDb();
+  if (!db) {
+    memClaimed[itemId] = [...(memClaimed[itemId] ?? []), tier];
+    return;
+  }
+  ensureSeeded(db);
+  db.runSync('INSERT OR IGNORE INTO claimed_milestones (item_id, tier) VALUES (?, ?)', [itemId, tier]);
+}
+
+function readSortCounts(): Record<string, number> {
+  const db = openDb();
+  if (!db) return { ...memSortCounts };
+  ensureSeeded(db);
+  const out: Record<string, number> = {};
+  for (const r of db.getAllSync('SELECT item_id, sorts FROM item_sort_counts') as any[]) {
+    out[r.item_id] = r.sorts;
+  }
+  return out;
+}
+
+/** Item ids with at least one reached-but-unclaimed milestone tier. */
+export function getUnclaimedRewardItemIds(): string[] {
+  const counts = readSortCounts();
+  const claimed = readClaimed();
+  return Object.keys(counts).filter((id) =>
+    MILESTONE_TIERS.some((t) => counts[id] >= t && !(claimed[id] ?? []).includes(t)),
+  );
+}
+
+export function hasUnclaimedRewards(): boolean {
+  return getUnclaimedRewardItemIds().length > 0;
+}
+
+/** Full item def by id, searching universal/city seeds then seasonal seeds. */
+export function getItemById(id: string): GameItem | undefined {
+  const found = SEED.find((it) => it.id === id);
+  if (found) return found;
+  for (const s of SEASON_SEED) {
+    const it = s.items.find((x) => x.id === id);
+    if (it) return { ...it, region: 'seasonal', season: s.id, funFact: FUN_FACTS[it.id] } as GameItem;
+  }
+  return undefined;
 }
 
 const pityKey = (seasonId: string) => `pity_${seasonId}`;

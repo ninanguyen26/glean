@@ -1,5 +1,13 @@
 import React, { useEffect, useState } from 'react';
 import { View, Text, StyleSheet } from 'react-native';
+import {
+  playBeltMusic,
+  playMainMusic,
+  setMusicMuted,
+  setSoundMuted,
+} from '../audio/sounds';
+import { getSetting } from './db';
+import { setHapticsMuted } from './feel';
 import { C } from '../spike/effects';
 import { HomeScreen } from './HomeScreen';
 import { MapScreen } from './MapScreen';
@@ -15,6 +23,7 @@ import {
   ProgressSnapshot,
   recordShiftResult,
   recordEndlessBest,
+  hasUnclaimedRewards,
 } from './db';
 
 /* Phase 6: progression shell nav — map -> rules -> shift -> summary.
@@ -32,9 +41,36 @@ export function GameRoot() {
   const [screen, setScreen] = useState<Screen>({ name: 'home' });
   const [progress, setProgress] = useState<ProgressSnapshot | null>(null);
   const [albumOpen, setAlbumOpen] = useState(false);
+  const [rewardsReady, setRewardsReady] = useState(false);
+  const [hudTick, setHudTick] = useState(0);
+
+  // milestone rewards: refresh the home badge and HUD cash whenever the screen
+  // changes or the album closes. Claims happen behind the modal scrim, so the
+  // HUD only needs to be correct when home is revealed again; the tick forces
+  // a re-render even when the badge state didn't flip (React would bail out).
+  useEffect(() => {
+    setRewardsReady(hasUnclaimedRewards());
+    setHudTick((t) => t + 1);
+  }, [screen, albumOpen]);
 
   const refresh = () => setProgress(loadProgress());
-  useEffect(refresh, []);
+  useEffect(() => {
+    refresh();
+    // restore persisted audio/haptic prefs before any music starts
+    setSoundMuted(getSetting('sound_muted') === '1');
+    setHapticsMuted(getSetting('haptics_muted') === '1');
+    setMusicMuted(getSetting('music_muted') === '1');
+  }, []);
+
+  // music: belt loop on the belt screen, main theme everywhere else
+  useEffect(() => {
+    if (!progress) return;
+    if (screen.name === 'shift' || screen.name === 'endless') {
+      playBeltMusic();
+    } else {
+      playMainMusic();
+    }
+  }, [screen.name, progress]);
 
   // soft pity: a shift with no rare seasonal sighting raises the odds
   const pityBump = (sawRare: boolean) => {
@@ -64,6 +100,8 @@ export function GameRoot() {
           }
           onMap={() => setScreen({ name: 'map' })}
           onAlbum={() => setAlbumOpen(true)}
+          rewardsReady={rewardsReady}
+          hudTick={hudTick}
         />
       );
       break;
@@ -165,7 +203,12 @@ export function GameRoot() {
   return (
     <View style={styles.root}>
       {content}
-      {albumOpen && <AlbumScreen onBack={() => setAlbumOpen(false)} />}
+      {albumOpen && (
+        <AlbumScreen
+          onBack={() => setAlbumOpen(false)}
+          onRewardsChanged={() => setHudTick((t) => t + 1)}
+        />
+      )}
     </View>
   );
 }

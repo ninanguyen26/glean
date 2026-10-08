@@ -13,12 +13,17 @@ import {
   getAllRegions,
   getAllSeasons,
   getCityItems,
+  getItemById,
   getSeenItemIds,
+  getUnclaimedRewardItemIds,
   getUniversalItems,
   SeasonDef,
 } from "./db";
 import { ItemGlyph } from "./ItemGlyph";
 import { GameItem } from "./items";
+import { ItemDetailModal } from "./ItemDetailModal";
+import { tapFeedback } from "./feel";
+import { playTap } from "../audio/sounds";
 
 /* Album as a modal card: dimmed backdrop, cream card, COMMON/SEASONAL/CITIES
    tabs, 3-column tile grid. COMMON = universal items; SEASONAL = seasonal
@@ -65,33 +70,62 @@ function Tile({
   it,
   kind,
   seen,
+  onPress,
 }: {
   it: GameItem;
   kind: Section["kind"];
   seen: Set<string>;
+  onPress: (it: GameItem) => void;
 }) {
   const isSeen = seen.has(it.id);
   const label = tileLabel(it, kind);
   return (
-    <View style={styles.tile}>
+    <Pressable
+      style={styles.tile}
+      onPress={() => {
+        tapFeedback();
+        playTap();
+        onPress(it);
+      }}
+    >
       <Text style={[styles.rarity, { color: label?.color ?? palette.fog }]}>
         {label?.text ?? " "}
       </Text>
-      <ItemGlyph def={it} size={48} silhouette={!isSeen} />
-      <Text style={styles.name} numberOfLines={2}>
-        {isSeen ? it.name : "???"}
-      </Text>
-    </View>
+      <ItemGlyph def={it} size={44} silhouette={!isSeen} />
+      <View style={styles.nameWrap}>
+        <Text style={styles.name} numberOfLines={1}>
+          {isSeen ? it.name : "???"}
+        </Text>
+      </View>
+    </Pressable>
   );
 }
 
-export function AlbumScreen({ onBack }: { onBack: () => void }) {
+export function AlbumScreen({
+  onBack,
+  onRewardsChanged,
+}: {
+  onBack: () => void;
+  onRewardsChanged: () => void;
+}) {
   const { width: dw, height: dh } = useWindowDimensions();
   const [tabId, setTabId] = useState<"common" | "seasonal" | "cities">(
     "seasonal",
   );
   const [chip, setChip] = useState<string>("all");
   const [seen, setSeen] = useState<Set<string>>(new Set());
+  const [detail, setDetail] = useState<GameItem | null>(null);
+  const [rewardIds, setRewardIds] = useState<string[]>(() =>
+    getUnclaimedRewardItemIds(),
+  );
+  const refreshRewards = () => setRewardIds(getUnclaimedRewardItemIds());
+  const handleClaimed = () => {
+    refreshRewards();
+    onRewardsChanged(); // HUD cash updates live at claim press
+  };
+  const rewardItems = rewardIds
+    .map(getItemById)
+    .filter((it): it is GameItem => !!it);
 
   useEffect(() => {
     try {
@@ -156,9 +190,15 @@ export function AlbumScreen({ onBack }: { onBack: () => void }) {
     0,
   );
   const cardWidth = Math.min(dw - 40, 430);
+  // The grid shows exactly 3 rows of square tiles at an explicit height; the
+  // card shrink-wraps its content (no fixed height, no flex) so dead space
+  // is structurally impossible.
+  const tileSize = (cardWidth - 32 - 6) * 0.31; // grid width minus card padding + borders
+  const gridH = (tileSize + 12) * 3; // 3 rows; each tile carries marginBottom 12
 
   return (
-    <View style={styles.overlay}>
+    // full-screen backdrop
+    <View style={[styles.overlay, { height: dh }]}>
       <View style={[styles.topRow, { width: cardWidth }]}>
         <View style={styles.tabs}>
           {TABS.map((t, i) => {
@@ -210,7 +250,7 @@ export function AlbumScreen({ onBack }: { onBack: () => void }) {
           </Text>
         </Pressable>
       </View>
-      <View style={[styles.card, { width: cardWidth, height: dh * 0.58 }]}>
+      <View style={[styles.card, { width: cardWidth }]}>
         {chips.length > 0 && (
           <View style={styles.chips}>
             {chips.map((c) => {
@@ -238,7 +278,7 @@ export function AlbumScreen({ onBack }: { onBack: () => void }) {
           </View>
         )}
         <ScrollView
-          style={styles.gridScroll}
+          style={{ height: gridH }}
           contentContainerStyle={styles.grid}
           showsVerticalScrollIndicator={false}
         >
@@ -248,7 +288,13 @@ export function AlbumScreen({ onBack }: { onBack: () => void }) {
                 <Text style={styles.sectionHeader}>{sec.title}</Text>
               ) : null}
               {sec.items.map((it) => (
-                <Tile key={it.id} it={it} kind={sec.kind} seen={seen} />
+                <Tile
+                  key={it.id}
+                  it={it}
+                  kind={sec.kind}
+                  seen={seen}
+                  onPress={setDetail}
+                />
               ))}
             </React.Fragment>
           ))}
@@ -256,7 +302,39 @@ export function AlbumScreen({ onBack }: { onBack: () => void }) {
         <Text style={styles.count}>
           {found}/{total} found
         </Text>
+        {rewardItems.length > 0 && (
+          <>
+            <Text style={styles.rewardTitle}>REWARDS</Text>
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              style={styles.rewardStripScroll}
+              contentContainerStyle={styles.rewardStrip}
+            >
+              {rewardItems.map((it) => (
+                <Pressable
+                  key={it.id}
+                  style={styles.rewardThumb}
+                  onPress={() => {
+                    tapFeedback();
+                    setDetail(it);
+                  }}
+                >
+                  <ItemGlyph def={it} size={44} />
+                </Pressable>
+              ))}
+            </ScrollView>
+          </>
+        )}
       </View>
+      {detail && (
+        <ItemDetailModal
+          item={detail}
+          seen={seen.has(detail.id)}
+          onClose={() => setDetail(null)}
+          onClaimed={handleClaimed}
+        />
+      )}
     </View>
   );
 }
@@ -267,7 +345,7 @@ const styles = StyleSheet.create({
     top: 0,
     left: 0,
     right: 0,
-    bottom: 0,
+    // height set inline: full window height (dh)
     backgroundColor: palette.scrim,
     justifyContent: "center",
     alignItems: "center",
@@ -359,7 +437,31 @@ const styles = StyleSheet.create({
     color: palette.fog,
     marginTop: 10,
   },
-  gridScroll: { flex: 1 },
+  rewardTitle: {
+    fontSize: 11,
+    fontWeight: "800",
+    letterSpacing: 2,
+    color: palette.fog,
+    marginTop: 12,
+    marginBottom: 8,
+  },
+  rewardStripScroll: {
+    height: 56,
+  },
+  rewardStrip: {
+    gap: 10,
+    paddingHorizontal: 2,
+  },
+  rewardThumb: {
+    width: 56,
+    height: 56,
+    borderRadius: 14,
+    backgroundColor: palette.sand,
+    borderWidth: 2,
+    borderColor: palette.gold,
+    alignItems: "center",
+    justifyContent: "center",
+  },
   grid: {
     flexDirection: "row",
     flexWrap: "wrap",
@@ -377,11 +479,11 @@ const styles = StyleSheet.create({
   },
   tile: {
     width: "31%",
-    aspectRatio: 1,
+    aspectRatio: 1, // square
     marginBottom: 12,
-    backgroundColor: palette.oat,
+    backgroundColor: palette.butter,
     borderRadius: 14,
-    paddingVertical: 8,
+    paddingVertical: 6,
     paddingHorizontal: 8,
     alignItems: "center",
     justifyContent: "space-between",
@@ -393,12 +495,17 @@ const styles = StyleSheet.create({
     letterSpacing: 1.5,
     marginBottom: 2,
   },
+  nameWrap: {
+    marginTop: 6,
+    height: 20, // single row, vertically centered
+    justifyContent: "center",
+    overflow: "hidden", // long names clip instead of pushing the tile
+  },
   name: {
     fontSize: 10,
     fontWeight: "600",
     color: palette.bark,
     textAlign: "center",
-    marginTop: 6,
-    lineHeight: 14,
+    lineHeight: 12,
   },
 });

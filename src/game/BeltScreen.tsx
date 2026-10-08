@@ -21,7 +21,8 @@ import Animated, {
   withSpring,
   withTiming,
 } from "react-native-reanimated";
-import { playCorrect, playSinkDrop, playWrong } from "../audio/sounds";
+import { playCorrect, playSinkDrop, playTap, playWrong } from "../audio/sounds";
+import { tapFeedback } from "./feel";
 import { palette } from "../constants/theme";
 import {
   BIN_BOTTOM,
@@ -49,6 +50,7 @@ import {
   SeasonDef,
   starsForAccuracy,
 } from "./db";
+import { DetergentModal } from "./DetergentModal";
 import { DisassemblyModal } from "./DisassemblyModal";
 import { ItemGlyph } from "./ItemGlyph";
 import { BINS, GameItem, ItemDef } from "./items";
@@ -76,6 +78,7 @@ import {
   ICON_WINTER,
 } from "./sprites";
 import { spriteTuningFor } from "./spriteSizes";
+import { WineModal } from "./WineModal";
 
 /*
  * Phase 6: belt loop as a parameterized shift — region pool, workweek day
@@ -111,8 +114,8 @@ const SHIFT_ITEMS = 20;
 const CHEV_GAP = 44;
 const ENDLESS_LIVES = 3;
 
-// DEBUG: spawn only Portland items (skip the full game loop when testing Portland)
-const DEBUG_PORTLAND_ONLY = true;
+// DEBUG: spawn only wine bottles (testing the capsule modal)
+const DEBUG_DETERGENT_ONLY = true;
 
 // work area: sink top-left, a row of 4 rack slots below it, prep tray
 // right (3:4); the tray doubles as the bottle prep drop zone
@@ -154,6 +157,8 @@ function BeltItem({
   onRinseHint,
   onBottleSinkHint,
   onCleanHint,
+  onBothHint,
+  onTwistFirstHint,
 }: {
   itemKey: number;
   def: ItemDef;
@@ -168,7 +173,13 @@ function BeltItem({
     y: number,
   ) => void;
   onMissed: (key: number, defId: string) => void;
-  onPrep: (key: number, def: GameItem, x: number, y: number) => void;
+  onPrep: (
+    key: number,
+    def: GameItem,
+    x: number,
+    y: number,
+    dirty?: boolean,
+  ) => void;
   onDanger: (key: number) => void;
   onSink: (key: number, defId: string, x: number, y: number) => void;
   onBottleNeedsPrep: () => void;
@@ -176,6 +187,8 @@ function BeltItem({
   onRinseHint: () => void;
   onBottleSinkHint: () => void;
   onCleanHint: () => void;
+  onBothHint: () => void;
+  onTwistFirstHint: () => void;
 }) {
   const bx = useSharedValue(SPAWN_X);
   const dx = useSharedValue(0);
@@ -277,6 +290,31 @@ function BeltItem({
       const prepHit = inPrep(cx, cy);
       const binHit = hitBin(cx, cy);
       const sinkHit = hitSink(cx, cy);
+      // BOTH (complex + rinse): twist cap seals the bottle, so prep first
+      if (def.complex && def.needsRinse) {
+        if (def.mechanic === "twist") {
+          if (prepHit) {
+            settled.value = true;
+            runOnJS(onPrep)(itemKey, def, cx, cy, true);
+          } else {
+            bounce();
+            if (sinkHit) runOnJS(onTwistFirstHint)();
+            else if (binHit >= 0) runOnJS(onBothHint)();
+          }
+          return;
+        }
+        if (prepHit) {
+          settled.value = true;
+          runOnJS(onPrep)(itemKey, def, cx, cy, true);
+        } else if (sinkHit) {
+          settled.value = true;
+          runOnJS(onSink)(itemKey, def.id, cx, cy);
+        } else {
+          bounce();
+          if (binHit >= 0) runOnJS(onBothHint)();
+        }
+        return;
+      }
       if (def.complex) {
         if (prepHit) {
           settled.value = true;
@@ -360,6 +398,7 @@ export function BeltScreen({
     y: number;
     paused: boolean;
     item: GameItem;
+    dirty: boolean;
   } | null>(null);
   const [danger, setDanger] = useState(false);
   const [sinkItems, setSinkItems] = useState<SinkItem[]>([]);
@@ -480,9 +519,9 @@ export function BeltScreen({
 
   const buildQueue = (p: GameItem[], n: number): GameItem[] => {
     const q: GameItem[] = [];
-    const portland = p.filter((it) => it.region === "portland");
-    if (DEBUG_PORTLAND_ONLY && portland.length > 0) {
-      for (let i = 0; i < n; i++) q.push(portland[i % portland.length]);
+    const detergent = p.find((it) => it.id === "detergent-bottle");
+    if (DEBUG_DETERGENT_ONLY && detergent) {
+      for (let i = 0; i < n; i++) q.push(detergent);
       return q;
     }
     const bottle = p.find((it) => it.id === "bottle");
@@ -500,7 +539,7 @@ export function BeltScreen({
     streakMilestonesRef.current = new Set();
     queueRef.current = buildQueue(pool, SHIFT_ITEMS);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [runId, pool, DEBUG_PORTLAND_ONLY]);
+  }, [runId, pool, DEBUG_DETERGENT_ONLY]);
 
   // spawner (dead while the belt is paused for learning; refills in endless)
   useEffect(() => {
@@ -668,11 +707,49 @@ export function BeltScreen({
     setResolved((r) => r + 1);
   };
 
-  const handlePrep = (key: number, def: GameItem, x: number, y: number) => {
+  const handlePrep = (
+    key: number,
+    def: GameItem,
+    x: number,
+    y: number,
+    dirty: boolean = true,
+  ) => {
     setItems((prev) => prev.filter((i) => i.key !== key));
     clearDanger(key);
     const paused = !endless;
-    setModal({ x, y, paused, item: def });
+    setModal({ x, y, paused, item: def, dirty });
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+  };
+
+  // rack -> prep (BOTH item rinsed first, still needs disassembly)
+  const handleRackPrep = (key: number, defId: string, x: number, y: number) => {
+    const def = findDef(defId);
+    if (!def) return;
+    setSinkItems((prev) => pumpSink(prev.filter((it) => it.key !== key)));
+    const paused = !endless;
+    setModal({ x, y, paused, item: def, dirty: false });
+    setHint(null);
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+  };
+
+  // a modal part dropped in the in-modal sink (BOTH item, prep-first path)
+  const modalSinkDropRef = useRef(false);
+  const pendingBothRef = useRef<{ allCorrect: boolean } | null>(null);
+  const sinkKeyRef = useRef(100000);
+  const handlePartSink = (x: number, y: number) => {
+    const m = modal;
+    if (!m) return;
+    const item: SinkItem = {
+      key: sinkKeyRef.current++,
+      def: m.item,
+      seq: seqRef.current++,
+      status: "queued",
+      prepped: true,
+    };
+    setSinkItems((prev) => pumpSink([...prev, item]));
+    modalSinkDropRef.current = true;
+    setHint(null);
+    playSinkDrop();
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
   };
 
@@ -680,6 +757,15 @@ export function BeltScreen({
     const m = modal;
     if (!m) return;
     setModal(null);
+    const wentToSink = modalSinkDropRef.current;
+    modalSinkDropRef.current = false;
+    if (wentToSink) {
+      // BOTH item, prep-first path: a part is still washing.
+      // Defer correct/resolved until the final rack->bin sort.
+      pendingBothRef.current = { allCorrect };
+      setHint(null);
+      return;
+    }
     if (allCorrect) {
       if (m) {
         markItemSeen(m.item.id);
@@ -747,13 +833,41 @@ export function BeltScreen({
     y: number,
   ) => {
     const def = findDef(defId);
+    const rackItem = sinkItems.find((it) => it.key === key);
+    // BOTH item not yet prepped: bins are off-limits, it needs the prep tray
+    if (def && def.complex && def.needsRinse && rackItem && !rackItem.prepped) {
+      setHint("Prep it first — drop it in the Prep tray");
+      return;
+    }
     setSinkItems((prev) => pumpSink(prev.filter((it) => it.key !== key)));
     if (!def) {
       setResolved((r) => r + 1);
       return;
     }
     const bin = BINS[binIdx];
-    if (bin.id === def.bin) {
+    const sortOk = bin.id === def.bin;
+    // BOTH item, prep-first path: combine modal result with this final sort
+    const pending = pendingBothRef.current;
+    if (def.complex && def.needsRinse && rackItem?.prepped && pending) {
+      pendingBothRef.current = null;
+      if (pending.allCorrect && sortOk) {
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+        playCorrect();
+        addBurst(x, y);
+        markItemSeen(def.id);
+        incrementSortCount(def.id);
+        setCorrect((c) => c + 1);
+        bumpStreak();
+      } else {
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+        playWrong();
+        wrongSort(def);
+      }
+      setHint(null);
+      setResolved((r) => r + 1);
+      return;
+    }
+    if (sortOk) {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
       playCorrect();
       addBurst(x, y);
@@ -776,11 +890,15 @@ export function BeltScreen({
   };
 
   const handleBottleNeedsPrep = () =>
-    setHint("Prep the bottle first — drop it in the Prep tray");
-  const handlePrepHint = () => setHint("Only bottles need prep");
-  const handleRinseHint = () => setHint("Rinse it first — drop it in the sink");
-  const handleBottleSinkHint = () => setHint("Bottles go to the Prep tray");
-  const handleCleanHint = () => setHint("That one's already clean");
+    setHint("Prep it first — drop it in the Prep tray");
+  const handlePrepHint = () => setHint("That doesn't need prep");
+  const handleRinseHint = () => setHint("Rinse it first — drop it in the Sink");
+  const handleBottleSinkHint = () =>
+    setHint("Prep it first — drop it in the Prep tray");
+  const handleCleanHint = () => setHint("That doesn't need rinsing");
+  const handleBothHint = () => setHint("Prep or rinse it first");
+  const handleTwistFirstHint = () =>
+    setHint("Twist the cap off first — drop it in the Prep tray");
 
   const chevStyle = useAnimatedStyle(() => ({
     transform: [{ translateX: scroll.value }],
@@ -846,7 +964,11 @@ export function BeltScreen({
           <LifetimeHud />
         </View>
         <Pressable
-          onPress={() => setUserPaused(true)}
+          onPress={() => {
+            tapFeedback();
+            playTap();
+            setUserPaused(true);
+          }}
           hitSlop={10}
           style={styles.pauseBtn}
         >
@@ -985,6 +1107,8 @@ export function BeltScreen({
           onRinseHint={handleRinseHint}
           onBottleSinkHint={handleBottleSinkHint}
           onCleanHint={handleCleanHint}
+          onBothHint={handleBothHint}
+          onTwistFirstHint={handleTwistFirstHint}
         />
       ))}
 
@@ -1003,6 +1127,8 @@ export function BeltScreen({
           index={i}
           binRects={binRects}
           onCleanDrop={handleRackDrop}
+          onPrepDrop={handleRackPrep}
+          onPrepHint={handleBottleNeedsPrep}
         />
       ))}
 
@@ -1024,7 +1150,7 @@ export function BeltScreen({
         <Burst key={bb.id} x={bb.x} y={bb.y} />
       ))}
 
-      {/* disassembly modal (coffee cup gets its own lid-sleeve modal) */}
+      {/* disassembly modal (coffee cup gets its own lid-sleeve modal, wine gets capsule) */}
       {modal &&
         (modal.item.mechanic === "lid-sleeve" ? (
           <CoffeeCupModal
@@ -1034,6 +1160,30 @@ export function BeltScreen({
             danger={danger}
             parts={modal.item.parts ?? []}
             itemId={modal.item.id}
+            onClose={handleModalClose}
+          />
+        ) : modal.item.mechanic === "capsule" ? (
+          <WineModal
+            origin={{ x: modal.x, y: modal.y }}
+            paused={modal.paused}
+            ticker={queueRef.current.slice(0, 3)}
+            danger={danger}
+            parts={modal.item.parts ?? []}
+            itemId={modal.item.id}
+            dirty={modal.dirty}
+            onPartSink={handlePartSink}
+            onClose={handleModalClose}
+          />
+        ) : modal.item.mechanic === "twist" ? (
+          <DetergentModal
+            origin={{ x: modal.x, y: modal.y }}
+            paused={modal.paused}
+            ticker={queueRef.current.slice(0, 3)}
+            danger={danger}
+            parts={modal.item.parts ?? []}
+            itemId={modal.item.id}
+            dirty={modal.dirty}
+            onPartSink={handlePartSink}
             onClose={handleModalClose}
           />
         ) : (
@@ -1176,10 +1326,10 @@ const styles = StyleSheet.create({
   },
   hintWrap: {
     position: "absolute",
-    top: 185,
-    left: 115,
-    right: 115,
-    height: 120,
+    top: 175,
+    left: 110,
+    right: 110,
+    height: 110,
     justifyContent: "center",
     alignItems: "center",
     backgroundColor: "rgba(74, 63, 53, 0.65)",

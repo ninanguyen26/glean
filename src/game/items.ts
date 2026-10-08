@@ -35,6 +35,7 @@ export interface GameItem {
   signature?: boolean;
   tricky?: boolean;
   teaching?: string;
+  funFact?: string; // field-guide trivia, shown in the album's item modal
   parts?: PartDef[]; // separable parts for complex items
   season?: string; // seasonal event id, e.g. 'winter'
   rarity?: 'common' | 'uncommon' | 'rare';

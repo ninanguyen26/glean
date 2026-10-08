@@ -24,7 +24,12 @@ import { C } from "../spike/effects";
 import { ShiftResult } from "./BeltScreen";
 import { RegionDef } from "./items";
 import { LifetimeHud } from "./LifetimeHud";
-import { ICON_COIN, ICON_STAR, ICON_STAR_OUTLINE, PORTLAND_BG } from "./sprites";
+import {
+  ICON_COIN,
+  ICON_STAR,
+  ICON_STAR_OUTLINE,
+  PORTLAND_BG,
+} from "./sprites";
 
 /* Phase 6: shift summary — stars, accuracy, today's lesson, continue/replay.
  * Reward flight: the earned coin + stars fire together into the HUD pills,
@@ -57,17 +62,24 @@ function Flyer({ spec }: { spec: FlyerSpec }) {
         { duration: spec.duration, easing: Easing.out(Easing.cubic) },
         (finished) => {
           if (finished) runOnJS(spec.onLand)();
-        }
-      )
+        },
+      ),
     );
   }, []);
   const style = useAnimatedStyle(() => {
     const e = t.value;
     const x = spec.sx + (spec.ex - spec.sx) * e - spec.size / 2;
     const y =
-      spec.sy + (spec.ey - spec.sy) * e - Math.sin(e * Math.PI) * 44 - spec.size / 2;
+      spec.sy +
+      (spec.ey - spec.sy) * e -
+      Math.sin(e * Math.PI) * 44 -
+      spec.size / 2;
     return {
-      transform: [{ translateX: x }, { translateY: y }, { scale: 1 - e * 0.35 }],
+      transform: [
+        { translateX: x },
+        { translateY: y },
+        { scale: 1 - e * 0.35 },
+      ],
       opacity: 1 - e * e * 0.5,
     };
   });
@@ -76,14 +88,25 @@ function Flyer({ spec }: { spec: FlyerSpec }) {
       source={spec.source}
       resizeMode="contain"
       style={[
-        { position: "absolute", left: 0, top: 0, width: spec.size, height: spec.size },
+        {
+          position: "absolute",
+          left: 0,
+          top: 0,
+          width: spec.size,
+          height: spec.size,
+        },
         style,
       ]}
     />
   );
 }
 
-function tweenNumber(from: number, to: number, durMs: number, set: (n: number) => void) {
+function tweenNumber(
+  from: number,
+  to: number,
+  durMs: number,
+  set: (n: number) => void,
+) {
   const start = Date.now();
   const step = () => {
     const p = Math.min(1, (Date.now() - start) / durMs);
@@ -101,9 +124,17 @@ function measureView(ref: { current: any }): Promise<{
 }> {
   return new Promise((resolve) => {
     const node: any = ref.current;
-    if (!node || !node.measure) return resolve({ w: 0, h: 0, pageX: 0, pageY: 0 });
-    node.measure((_x: number, _y: number, w: number, h: number, pageX: number, pageY: number) =>
-      resolve({ w, h, pageX, pageY })
+    if (!node || !node.measure)
+      return resolve({ w: 0, h: 0, pageX: 0, pageY: 0 });
+    node.measure(
+      (
+        _x: number,
+        _y: number,
+        w: number,
+        h: number,
+        pageX: number,
+        pageY: number,
+      ) => resolve({ w, h, pageX, pageY }),
     );
   });
 }
@@ -134,7 +165,9 @@ export function SummaryScreen({
   const starsBoxRef = useRef<View>(null);
 
   useEffect(() => {
-    AccessibilityInfo.isReduceMotionEnabled().then(setReduceMotion).catch(() => {});
+    AccessibilityInfo.isReduceMotionEnabled()
+      .then(setReduceMotion)
+      .catch(() => {});
   }, []);
 
   useEffect(() => {
@@ -159,7 +192,9 @@ export function SummaryScreen({
       const specs: FlyerSpec[] = [];
       // coin: earned row (region) or big score (endless) -> cash pill
       if (result.cashEarned > 0) {
-        const anchor = region ? await measureView(earnedCoinRef) : await measureView(scoreRef);
+        const anchor = region
+          ? await measureView(earnedCoinRef)
+          : await measureView(scoreRef);
         if (!cancelled && anchor.w > 0) {
           specs.push({
             id: "coin",
@@ -179,7 +214,7 @@ export function SummaryScreen({
                 result.cashBefore,
                 result.cashBefore + result.cashEarned,
                 450,
-                setCashShown
+                setCashShown,
               );
               setFlyers((f) => f.filter((s) => s.id !== "coin"));
             },
@@ -196,7 +231,11 @@ export function SummaryScreen({
               id: `star-${idx}`,
               source: ICON_STAR,
               size: 40,
-              sx: box.pageX + box.w / 2 - ox + (idx - (result.stars - 1) / 2) * 12,
+              sx:
+                box.pageX +
+                box.w / 2 -
+                ox +
+                (idx - (result.stars - 1) / 2) * 12,
               sy: box.pageY + box.h / 2 - oy,
               ex: rowX + PILL_W + PILL_GAP + PILL_W / 2 - ox,
               ey: pillCY - oy,
@@ -209,7 +248,9 @@ export function SummaryScreen({
                 setStarsShown(result.starsBefore + idx + 1);
                 setFlyers((f) => f.filter((s) => s.id !== `star-${idx}`));
                 if (idx === result.stars - 1) {
-                  Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+                  Haptics.notificationAsync(
+                    Haptics.NotificationFeedbackType.Success,
+                  );
                 }
               },
             });
@@ -294,7 +335,11 @@ export function SummaryScreen({
             </View>
             <View style={styles.statRow}>
               <View style={styles.statLabelRow}>
-                <Image source={ICON_COIN} style={styles.statIcon} resizeMode="contain" />
+                <Image
+                  source={ICON_COIN}
+                  style={styles.statIcon}
+                  resizeMode="contain"
+                />
                 <Text style={styles.statLabel}>Streak bonus</Text>
               </View>
               <Text style={styles.statValue}>+${result.streakBonus}</Text>
@@ -315,10 +360,8 @@ export function SummaryScreen({
           </View>
         )} */}
         <Pressable onPress={onContinue} style={styles.primary}>
-          <MaterialIcons name="map" size={22} color="#fff" />
-          <Text style={styles.primaryText}>
-            {region ? "Back to map" : "Back to map"}
-          </Text>
+          {/* <MaterialIcons name="arrow-back" size={22} color="#fff" /> */}
+          <Text style={styles.primaryText}>{region ? "Done" : "Done"}</Text>
         </Pressable>
         <Pressable onPress={onReplay} style={styles.secondary}>
           <MaterialIcons name="replay" size={20} color={C.sub} />

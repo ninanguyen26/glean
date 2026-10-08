@@ -79,6 +79,7 @@ export interface SinkItem {
   def: ItemDef;
   seq: number;
   status: SinkStatus;
+  prepped?: boolean; // true if it went through a prep modal before the sink
 }
 
 /* Pie timer: the circle is divided into 4 quadrants (cross dividers) and
@@ -219,6 +220,8 @@ export function RackSlot({
   index,
   binRects,
   onCleanDrop,
+  onPrepDrop,
+  onPrepHint,
 }: {
   item: SinkItem | null;
   index: number;
@@ -230,6 +233,8 @@ export function RackSlot({
     x: number,
     y: number,
   ) => void;
+  onPrepDrop?: (key: number, defId: string, x: number, y: number) => void;
+  onPrepHint?: () => void;
 }) {
   const tx = useSharedValue(0);
   const ty = useSharedValue(0);
@@ -248,15 +253,32 @@ export function RackSlot({
     })
     .onEnd((e) => {
       if (!item) return;
-      const hit = hitBinPoint(binRects, e.absoluteX, e.absoluteY);
+      const fx = e.absoluteX;
+      const fy = e.absoluteY;
+      // BOTH item (complex + rinse) not yet prepped: prep tray is the only
+      // valid target — bins bounce back with a hint
+      const needsPrep =
+        item.def.complex && item.def.needsRinse && !item.prepped;
+      if (needsPrep) {
+        const t = TRAY_RECT;
+        if (
+          onPrepDrop &&
+          fx >= t.x &&
+          fx <= t.x + t.w &&
+          fy >= t.y &&
+          fy <= t.y + t.h
+        ) {
+          runOnJS(onPrepDrop)(item.key, item.def.id, fx, fy);
+          return;
+        }
+        if (onPrepHint) runOnJS(onPrepHint)();
+        tx.value = withSpring(0, { damping: 18 });
+        ty.value = withSpring(0, { damping: 18 });
+        return;
+      }
+      const hit = hitBinPoint(binRects, fx, fy);
       if (hit >= 0) {
-        runOnJS(onCleanDrop)(
-          item.key,
-          item.def.id,
-          hit,
-          e.absoluteX,
-          e.absoluteY,
-        );
+        runOnJS(onCleanDrop)(item.key, item.def.id, hit, fx, fy);
       } else {
         tx.value = withSpring(0, { damping: 18 });
         ty.value = withSpring(0, { damping: 18 });

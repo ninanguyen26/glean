@@ -30,9 +30,9 @@
     {"id":"sixpack-carrier","region":"universal","name":"Six-pack carrier","bin":"recycle","color":"#C9A06B","shape":"rect"},
     {"id":"junk-mail","region":"universal","name":"Junk mail","bin":"recycle","color":"#E8E4DA","shape":"rect"},
     {"id":"yogurt-tub","region":"universal","name":"Yogurt tub","bin":"recycle","color":"#EDEAE2","shape":"circle","needsRinse":true},
-    {"id":"detergent-bottle","region":"universal","name":"Detergent bottle","bin":"recycle","color":"#E8735A","shape":"rect","needsRinse":true},
+    {"id":"detergent-bottle","region":"universal","name":"Detergent bottle","bin":"recycle","color":"#E8735A","shape":"rect","complex":true,"mechanic":"twist","needsRinse":true,"teaching":"Twist the cap off — then sort the parts.","parts":[{"id":"cap","label":"cap","bin":"recycle","hint":"Caps go in recycling."},{"id":"body","label":"bottle","bin":"recycle","hint":"Bottles go in recycling."}]},
     {"id":"cereal-box","region":"universal","name":"Cereal box","bin":"recycle","color":"#E8C53D","shape":"rect"},
-    {"id":"wine-bottle","region":"universal","name":"Wine bottle","bin":"recycle","color":"#7A9A5B","shape":"rect","needsRinse":true},
+    {"id":"wine-bottle","region":"universal","name":"Wine bottle","bin":"recycle","color":"#7A9A5B","shape":"rect","complex":true,"mechanic":"capsule","needsRinse":true,"teaching":"Pull the capsule off — then sort the parts.","parts":[{"id":"capsule","label":"capsule","bin":"landfill","hint":"Foil capsules are mixed material."},{"id":"bottle","label":"bottle","bin":"recycle","hint":"Glass bottles go in recycling."}]},
     {"id":"soup-can","region":"universal","name":"Soup can","bin":"recycle","color":"#B8C4C8","shape":"circle"},
     {"id":"grocery-bag","region":"universal","name":"Grocery bag","bin":"recycle","color":"#D9C9A8","shape":"rect"},
     {"id":"plant-pot","region":"universal","name":"Plant pot","bin":"recycle","color":"#A85F4B","shape":"circle"},
@@ -89,6 +89,7 @@
     {"id":"crisp-tube","region":"uk","name":"Crisp tube","bin":"landfill","color":"#E8735A","shape":"circle","tricky":true,"teaching":"Mixed materials — landfill."},
     {"id":"brolly","region":"uk","name":"Broken brolly","bin":"landfill","color":"#2E2A26","shape":"diamond","signature":true},
     {"id":"parcel-box","region":"uk","name":"Parcel box","bin":"recycle","color":"#C9A06B","shape":"rect","signature":true},
-    {"id":"tea-tin","region":"uk","name":"Tea tin","bin":"recycle","color":"#D95F4B","shape":"circle","signature":true}
+    {"id":"tea-tin","region":"uk","name":"Tea tin","bin":"recycle","color":"#D95F4B","shape":"circle","signature":true},
+    {"id":"wet-newspaper","region":"universal","name":"Soggy newspaper","bin":"landfill","color":"#8A9498","shape":"rect","tricky":true,"teaching":"Wet paper can't be recycled."}
   ]
 }
