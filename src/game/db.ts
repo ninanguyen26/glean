@@ -16,7 +16,7 @@ const SEED: GameItem[] = require('../../data/seed/items.json').items.map((it: an
   funFact: FUN_FACTS[it.id] ?? undefined,
 }));
 const REGION_SEED: RegionDef[] = require('../../data/seed/regions.json').regions;
-const DB_VERSION = 19;
+const DB_VERSION = 20;
 
 export interface SeasonItemSeed {
   id: string;
@@ -613,4 +613,31 @@ export function starsForAccuracy(correct: number, total: number): number {
   if (acc >= 0.7) return 2;
   if (acc >= 0.5) return 1;
   return 0;
+}
+
+/* ---------------- selected city ---------------- */
+
+let memSelectedCity: string | null = null;
+
+/**
+ * Persisted selected city id (default 'portland'). Set by tapping a city
+ * card in the map, or auto-picked when a new city unlocks. Endless mode
+ * never touches it, so the last city pick survives endless runs.
+ */
+export function getSelectedCity(): string {
+  const db = openDb();
+  if (!db) return memSelectedCity ?? 'portland';
+  ensureSeeded(db);
+  const row: any = db.getFirstSync('SELECT value FROM meta WHERE key = ?', ['selected_city']);
+  return row ? row.value : 'portland';
+}
+
+export function setSelectedCity(id: string) {
+  const db = openDb();
+  if (!db) {
+    memSelectedCity = id;
+    return;
+  }
+  ensureSeeded(db);
+  db.runSync('INSERT OR REPLACE INTO meta (key, value) VALUES (?, ?)', ['selected_city', id]);
 }

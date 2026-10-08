@@ -27,13 +27,13 @@ import { ICON_COIN, ICON_FUNFACT } from "./sprites";
 const PREP_LINES: Record<string, string> = {
   "twist-peel":
     "PREP first: twist the cap off, peel the label off, then sort the parts.",
-  "lid-sleeve":
+  "pull-peel":
     "PREP first: pop the lid, slide the sleeve off, then sort the parts.",
-  capsule:
+  pull:
     "PREP first: pull the capsule off, rinse the bottle, then sort the parts.",
   twist:
     "PREP first: twist the cap off, rinse the bottle, then sort the parts.",
-  crumple: "PREP first: tap 3 times to ball up the foil, then sort it.",
+  tap: "PREP first: tap 3 times to ball up the foil, then sort it.",
 };
 
 function RuleRow({ text }: { text: string }) {

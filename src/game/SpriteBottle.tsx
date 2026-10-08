@@ -19,10 +19,11 @@ import {
  */
 const STAGE_W = 250;
 const STAGE_H = 500;
+const BODY_Y = 20;
 const LAYER = {
   position: "absolute",
   left: 0,
-  top: 0,
+  top: BODY_Y,
   width: STAGE_W,
   height: STAGE_H,
 } as const;
@@ -31,10 +32,10 @@ const LAYER = {
 export const CAP_W = 255;
 export const CAP_H = CAP_W * (217 / 301);
 const CAP_X = 121 - CAP_W / 2;
-const CAP_Y = 124;
+const CAP_Y = 144;
 
 // label band on the whole: y ~38-59% -> circle UI center
-const LABEL_CY = STAGE_H * 0.485;
+const LABEL_CY = STAGE_H * 0.485 + 20;
 const CIRCLE_W = 138;
 const CIRCLE_H = 96;
 

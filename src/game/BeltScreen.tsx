@@ -1,5 +1,5 @@
 import * as Haptics from "expo-haptics";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, memo } from "react";
 import {
   Image,
   ImageBackground,
@@ -51,8 +51,8 @@ import {
 } from "./db";
 import { DetergentModal } from "./DetergentModal";
 import { DisassemblyModal } from "./DisassemblyModal";
-import { FoilModal } from "./FoilModal";
 import { tapFeedback } from "./feel";
+import { FoilModal } from "./FoilModal";
 import { ItemGlyph } from "./ItemGlyph";
 import { BINS, GameItem, ItemDef } from "./items";
 import { LifetimeHud } from "./LifetimeHud";
@@ -116,8 +116,8 @@ const SHIFT_ITEMS = 20;
 const CHEV_GAP = 44;
 const ENDLESS_LIVES = 3;
 
-// DEBUG: spawn only foil (testing the crumple modal)
-const DEBUG_FOIL_ONLY = true;
+// DEBUG: spawn only foil (testing the tap modal)
+const DEBUG_FOIL_ONLY = false;
 
 // work area: sink top-left, a row of 4 rack slots below it, prep tray
 // right (3:4); the tray doubles as the bottle prep drop zone
@@ -389,11 +389,109 @@ function BeltItem({
           style,
         ]}
       >
-        <ItemGlyph def={def} size={tuning.size} />
+        <View style={styles.itemGlow}>
+          <ItemGlyph def={def} size={tuning.size} />
+        </View>
       </Animated.View>
     </GestureDetector>
   );
 }
+
+// Memoized modal host: re-renders ONLY when the modal object identity
+// changes (open/close), never on BeltScreen background state updates
+// (sink finishing, belt items moving). Parent re-renders mid-gesture
+// corrupt in-progress drags and drop their runOnJS callbacks.
+const ModalHost = memo(
+  ({
+    modal,
+    danger,
+    ticker,
+    onClose,
+    onPartSink,
+  }: {
+    modal: {
+      x: number;
+      y: number;
+      paused: boolean;
+      item: any;
+      dirty: boolean;
+    };
+    danger: any;
+    ticker: any[];
+    onClose: (allCorrect: boolean) => void;
+    onPartSink: (x: number, y: number, spriteOverride?: any) => void;
+  }) => {
+    const origin = { x: modal.x, y: modal.y };
+    const parts = modal.item.parts ?? [];
+    if (modal.item.mechanic === "pull-peel") {
+      return (
+        <CoffeeCupModal
+          origin={origin}
+          paused={modal.paused}
+          ticker={ticker}
+          danger={danger}
+          parts={parts}
+          itemId={modal.item.id}
+          onClose={onClose}
+        />
+      );
+    }
+    if (modal.item.mechanic === "pull") {
+      return (
+        <WineModal
+          origin={origin}
+          paused={modal.paused}
+          ticker={ticker}
+          danger={danger}
+          parts={parts}
+          itemId={modal.item.id}
+          dirty={modal.dirty}
+          onPartSink={onPartSink}
+          onClose={onClose}
+        />
+      );
+    }
+    if (modal.item.mechanic === "twist") {
+      return (
+        <DetergentModal
+          origin={origin}
+          paused={modal.paused}
+          ticker={ticker}
+          danger={danger}
+          parts={parts}
+          itemId={modal.item.id}
+          dirty={modal.dirty}
+          onPartSink={onPartSink}
+          onClose={onClose}
+        />
+      );
+    }
+    if (modal.item.mechanic === "tap") {
+      return (
+        <FoilModal
+          origin={origin}
+          paused={modal.paused}
+          ticker={ticker}
+          danger={danger}
+          item={modal.item}
+          onClose={onClose}
+        />
+      );
+    }
+    return (
+      <DisassemblyModal
+        origin={origin}
+        paused={modal.paused}
+        ticker={ticker}
+        danger={danger}
+        parts={parts}
+        itemId={modal.item.id}
+        onClose={onClose}
+      />
+    );
+  },
+  (prev, next) => prev.modal === next.modal,
+);
 
 export function BeltScreen({
   regionId,
@@ -445,6 +543,7 @@ export function BeltScreen({
   const dangerKeysRef = useRef<Set<number>>(new Set());
   const lessonsRef = useRef(new Map<string, string>());
   const endedRef = useRef(false);
+  const endTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const seasonRef = useRef<{ def: SeasonDef; items: GameItem[] } | null>(null);
   const sawRareRef = useRef(false);
   const onShiftEndRef = useRef(onShiftEnd);
@@ -521,14 +620,14 @@ export function BeltScreen({
   }, [regionKey]);
 
   // random draw from the spawnable pool (complex items only once their
-  // mechanic exists; twist-peel, lid-sleeve and crumple do)
+  // mechanic exists; twist-peel, pull-peel and tap do)
   const drawFromPool = (p: GameItem[]): GameItem => {
     const spawnable = p.filter(
       (it) =>
         !it.complex ||
         it.mechanic === "twist-peel" ||
-        it.mechanic === "lid-sleeve" ||
-        it.mechanic === "crumple",
+        it.mechanic === "pull-peel" ||
+        it.mechanic === "tap",
     );
     let i = Math.floor(Math.random() * spawnable.length);
     if (i === lastDrawRef.current) i = (i + 1) % spawnable.length;
@@ -597,7 +696,9 @@ export function BeltScreen({
     const finished = endless ? lives <= 0 : resolved >= SHIFT_ITEMS;
     if (!finished || modal) return;
     endedRef.current = true;
-    const t = setTimeout(() => {
+    // stored in a ref (not effect cleanup): a re-render from a late sort
+    // must not cancel the pending shift end
+    endTimerRef.current = setTimeout(() => {
       if (quitRef.current) return;
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       const accuracy = resolved > 0 ? correct / resolved : 0;
@@ -639,8 +740,14 @@ export function BeltScreen({
         starsBefore,
       });
     }, 700);
-    return () => clearTimeout(t);
   }, [resolved, lives, modal, endless, correct, missed, bestStreak]);
+
+  // clear the pending shift-end timer only on unmount
+  useEffect(() => {
+    return () => {
+      if (endTimerRef.current) clearTimeout(endTimerRef.current);
+    };
+  }, []);
 
   const addBurst = (x: number, y: number) => {
     const id = ++burstId.current;
@@ -1187,62 +1294,16 @@ export function BeltScreen({
         <Burst key={bb.id} x={bb.x} y={bb.y} />
       ))}
 
-      {/* disassembly modal (each mechanic gets its own: lid-sleeve, capsule, twist, crumple) */}
-      {modal &&
-        (modal.item.mechanic === "lid-sleeve" ? (
-          <CoffeeCupModal
-            origin={{ x: modal.x, y: modal.y }}
-            paused={modal.paused}
-            ticker={queueRef.current.slice(0, 3)}
-            danger={danger}
-            parts={modal.item.parts ?? []}
-            itemId={modal.item.id}
-            onClose={handleModalClose}
-          />
-        ) : modal.item.mechanic === "capsule" ? (
-          <WineModal
-            origin={{ x: modal.x, y: modal.y }}
-            paused={modal.paused}
-            ticker={queueRef.current.slice(0, 3)}
-            danger={danger}
-            parts={modal.item.parts ?? []}
-            itemId={modal.item.id}
-            dirty={modal.dirty}
-            onPartSink={handlePartSink}
-            onClose={handleModalClose}
-          />
-        ) : modal.item.mechanic === "twist" ? (
-          <DetergentModal
-            origin={{ x: modal.x, y: modal.y }}
-            paused={modal.paused}
-            ticker={queueRef.current.slice(0, 3)}
-            danger={danger}
-            parts={modal.item.parts ?? []}
-            itemId={modal.item.id}
-            dirty={modal.dirty}
-            onPartSink={handlePartSink}
-            onClose={handleModalClose}
-          />
-        ) : modal.item.mechanic === "crumple" ? (
-          <FoilModal
-            origin={{ x: modal.x, y: modal.y }}
-            paused={modal.paused}
-            ticker={queueRef.current.slice(0, 3)}
-            danger={danger}
-            item={modal.item}
-            onClose={handleModalClose}
-          />
-        ) : (
-          <DisassemblyModal
-            origin={{ x: modal.x, y: modal.y }}
-            paused={modal.paused}
-            ticker={queueRef.current.slice(0, 3)}
-            danger={danger}
-            parts={modal.item.parts ?? []}
-            itemId={modal.item.id}
-            onClose={handleModalClose}
-          />
-        ))}
+      {/* disassembly modal (each mechanic gets its own: pull-peel, pull, twist, tap) */}
+      {modal && (
+        <ModalHost
+          modal={modal}
+          danger={danger}
+          ticker={queueRef.current.slice(0, 3)}
+          onClose={handleModalClose}
+          onPartSink={handlePartSink}
+        />
+      )}
 
       {/* user pause overlay */}
       {userPaused && (
@@ -1430,10 +1491,17 @@ const styles = StyleSheet.create({
     left: 0,
     width: ITEM_S + 16,
     alignItems: "center",
-    shadowColor: "#000",
-    shadowOpacity: 0.25,
+    shadowColor: "#fff",
+    shadowOpacity: 1,
     shadowRadius: 4,
-    shadowOffset: { width: 0, height: 3 },
+    shadowOffset: { width: 0, height: 0 },
+  },
+  itemGlow: {
+    alignItems: "center",
+    shadowColor: "#fff",
+    shadowOpacity: 1,
+    shadowRadius: 4,
+    shadowOffset: { width: 0, height: 0 },
   },
   itemLabel: {
     marginTop: 4,

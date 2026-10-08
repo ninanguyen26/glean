@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import {
+  Dimensions,
   Image,
-  ImageBackground,
   Pressable,
   StyleSheet,
   Text,
@@ -40,6 +40,8 @@ export function HomeScreen({
   progress,
   rewardsReady,
   hudTick,
+  selectedCity,
+  bgPaused,
 }: {
   onPlay: () => void;
   onMap: () => void;
@@ -49,18 +51,28 @@ export function HomeScreen({
   progress: any;
   rewardsReady: boolean;
   hudTick: number; // refresh token: bumps whenever HUD values may have changed
+  selectedCity: string;
+  bgPaused?: boolean; // true while a full-screen modal covers home
 }) {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [mapOpen, setMapOpen] = useState(false);
-  // 8-frame MRF background loop (12fps)
-  const [frame, setFrame] = useState(0);
+  // 8-frame MRF background loop (12fps) as a film strip: all 8 frames sit
+  // side-by-side in one row and the strip translates on the UI thread.
+  // The old setInterval+setFrame re-rendered the whole screen 12x/sec and
+  // flashed on every source swap; this does neither. Pauses under modals.
+  const SW = Dimensions.get("window").width;
+  const prog = useSharedValue(0);
+  const paused = settingsOpen || mapOpen || !!bgPaused;
   useEffect(() => {
-    const t = setInterval(
-      () => setFrame((f) => (f + 1) % HOME_BG_FRAMES.length),
-      1000 / 12,
-    );
+    if (paused) return;
+    const t = setInterval(() => {
+      prog.value = (prog.value + 1) % HOME_BG_FRAMES.length;
+    }, 1000 / 12);
     return () => clearInterval(t);
-  }, []);
+  }, [paused]);
+  const stripStyle = useAnimatedStyle(() => ({
+    transform: [{ translateX: -prog.value * SW }],
+  }));
 
   // breathing scale for the play button
   const scale = useSharedValue(1);
@@ -88,12 +100,19 @@ export function HomeScreen({
   }));
 
   return (
-    <ImageBackground
-      source={HOME_BG_FRAMES[frame]}
-      style={styles.root}
-      resizeMode="cover"
-      fadeDuration={0}
-    >
+    <View style={styles.root}>
+      <View style={styles.bgClip}>
+        <Animated.View style={[styles.bgStrip, stripStyle]}>
+          {HOME_BG_FRAMES.map((src, i) => (
+            <Image
+              key={i}
+              source={src}
+              style={[styles.bgFrame, { width: SW }]}
+              resizeMode="cover"
+            />
+          ))}
+        </Animated.View>
+      </View>
       <View style={styles.topRow}>
         <View style={styles.hud}>
           <LifetimeHud key={hudTick} />
@@ -180,6 +199,7 @@ export function HomeScreen({
       {mapOpen && (
         <MapScreen
           progress={progress}
+          selectedCityId={selectedCity}
           onSelectCity={(cityId) => {
             setMapOpen(false);
             onSelectCity(cityId);
@@ -191,12 +211,22 @@ export function HomeScreen({
           onClose={() => setMapOpen(false)}
         />
       )}
-    </ImageBackground>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
   root: { flex: 1 },
+  bgClip: {
+    position: "absolute",
+    left: 0,
+    right: 0,
+    top: 0,
+    bottom: 0,
+    overflow: "hidden",
+  },
+  bgStrip: { flexDirection: "row", height: "100%" },
+  bgFrame: { height: "100%" },
   topRow: {
     flexDirection: "row",
     justifyContent: "space-between",

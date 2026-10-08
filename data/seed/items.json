@@ -32,7 +32,7 @@
     {"id":"yogurt-tub","region":"universal","name":"Yogurt tub","bin":"recycle","color":"#EDEAE2","shape":"circle","needsRinse":true},
     {"id":"detergent-bottle","region":"universal","name":"Detergent bottle","bin":"recycle","color":"#E8735A","shape":"rect","complex":true,"mechanic":"twist","needsRinse":true,"teaching":"Twist the cap off — then sort the parts.","parts":[{"id":"cap","label":"cap","bin":"recycle","hint":"Caps go in recycling."},{"id":"body","label":"bottle","bin":"recycle","hint":"Bottles go in recycling."}]},
     {"id":"cereal-box","region":"universal","name":"Cereal box","bin":"recycle","color":"#E8C53D","shape":"rect"},
-    {"id":"wine-bottle","region":"universal","name":"Wine bottle","bin":"recycle","color":"#7A9A5B","shape":"rect","complex":true,"mechanic":"capsule","needsRinse":true,"teaching":"Pull the capsule off — then sort the parts.","parts":[{"id":"capsule","label":"capsule","bin":"landfill","hint":"Foil capsules are mixed material."},{"id":"bottle","label":"bottle","bin":"recycle","hint":"Glass bottles go in recycling."}]},
+    {"id":"wine-bottle","region":"universal","name":"Wine bottle","bin":"recycle","color":"#7A9A5B","shape":"rect","complex":true,"mechanic":"pull","needsRinse":true,"teaching":"Pull the capsule off — then sort the parts.","parts":[{"id":"capsule","label":"capsule","bin":"landfill","hint":"Foil capsules are mixed material."},{"id":"bottle","label":"bottle","bin":"recycle","hint":"Glass bottles go in recycling."}]},
     {"id":"soup-can","region":"universal","name":"Soup can","bin":"recycle","color":"#B8C4C8","shape":"circle"},
     {"id":"grocery-bag","region":"universal","name":"Grocery bag","bin":"recycle","color":"#D9C9A8","shape":"rect"},
     {"id":"plant-pot","region":"universal","name":"Plant pot","bin":"recycle","color":"#A85F4B","shape":"circle"},
@@ -48,7 +48,7 @@
     {"id":"growler","region":"portland","name":"Glass growler","bin":"recycle","color":"#8FB8A8","shape":"rect","needsRinse":true},
     {"id":"umbrella","region":"portland","name":"Broken umbrella","bin":"landfill","color":"#5A6B7A","shape":"diamond"},
     {"id":"rain-boot","region":"portland","name":"Rain boot","bin":"landfill","color":"#D95F4B","shape":"rect"},
-    {"id":"coffee-cup","region":"portland","name":"Coffee cup","bin":"landfill","color":"#D9C9A8","shape":"circle","complex":true,"mechanic":"lid-sleeve","signature":true,"teaching":"Pop the lid, slide the sleeve off — then sort the parts.","parts":[{"id":"sleeve","label":"sleeve","bin":"recycle","hint":"Sleeves are plain cardboard."},{"id":"lid","label":"lid","bin":"recycle","hint":"Lids go in recycling."},{"id":"cup","label":"cup","bin":"landfill","hint":"The cup is lined with plastic."}]},
+    {"id":"coffee-cup","region":"portland","name":"Coffee cup","bin":"landfill","color":"#D9C9A8","shape":"circle","complex":true,"mechanic":"pull-peel","signature":true,"teaching":"Pop the lid, slide the sleeve off — then sort the parts.","parts":[{"id":"sleeve","label":"sleeve","bin":"recycle","hint":"Sleeves are plain cardboard."},{"id":"lid","label":"lid","bin":"recycle","hint":"Lids go in recycling."},{"id":"cup","label":"cup","bin":"landfill","hint":"The cup is lined with plastic."}]},
     {"id":"voodoo-box","region":"portland","name":"Voodoo box","bin":"compost","color":"#E87A9A","shape":"rect","signature":true,"teaching":"Greasy — compost, don't recycle."},
     {"id":"pla-container","region":"portland","name":"Takeout container","bin":"compost","color":"#B8D8B8","shape":"rect","signature":true,"tricky":true,"teaching":"Looks like plastic — it's compostable PLA."},
     {"id":"wet-news","region":"portland","name":"Rain-soaked newspaper","bin":"landfill","color":"#8A9498","shape":"rect","signature":true,"tricky":true,"teaching":"Wet paper can't be recycled."},
@@ -91,7 +91,7 @@
     {"id":"parcel-box","region":"uk","name":"Parcel box","bin":"recycle","color":"#C9A06B","shape":"rect","signature":true},
     {"id":"tea-tin","region":"uk","name":"Tea tin","bin":"recycle","color":"#D95F4B","shape":"circle","signature":true},
     {"id":"wet-newspaper","region":"universal","name":"Soggy newspaper","bin":"landfill","color":"#8A9498","shape":"rect","tricky":true,"teaching":"Wet paper can't be recycled."},
-    {"id":"aluminum-foil","region":"universal","name":"Aluminum foil","bin":"recycle","color":"#C0CBD2","shape":"rect","complex":true,"mechanic":"crumple","tricky":true,"teaching":"Ball it up first — flat sheets fall through the screens."},
+    {"id":"aluminum-foil","region":"universal","name":"Aluminum foil","bin":"recycle","color":"#C0CBD2","shape":"rect","complex":true,"mechanic":"tap","tricky":true,"teaching":"Ball it up first — flat sheets fall through the screens."},
     {"id":"paper-clips","region":"universal","name":"Paper clips","bin":"landfill","color":"#9AA3A8","shape":"diamond","tricky":true,"teaching":"Too small — they fall through the screens."}
   ]
 }

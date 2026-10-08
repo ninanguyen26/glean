@@ -30,7 +30,7 @@ export interface GameItem {
   color: string;
   shape: 'circle' | 'rect' | 'diamond';
   complex?: boolean; // needs disassembly in the prep modal
-  mechanic?: string; // which disassembly choreography, e.g. 'twist-peel'
+  mechanic?: string; // locked verb set: twist, pull, tap, peel (combos e.g. 'twist-peel')
   needsRinse?: boolean; // must visit the sink before its bin
   signature?: boolean;
   tricky?: boolean;

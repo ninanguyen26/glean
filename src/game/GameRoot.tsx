@@ -23,6 +23,8 @@ import {
   recordShiftResult,
   recordEndlessBest,
   hasUnclaimedRewards,
+  getSelectedCity,
+  setSelectedCity,
 } from './db';
 
 /* Phase 6: progression shell nav — map -> rules -> shift -> summary.
@@ -41,6 +43,13 @@ export function GameRoot() {
   const [albumOpen, setAlbumOpen] = useState(false);
   const [rewardsReady, setRewardsReady] = useState(false);
   const [hudTick, setHudTick] = useState(0);
+  // persisted city pick: map taps set it, unlocks auto-pick the new city,
+  // endless never touches it.
+  const [selectedCity, setSelectedCityState] = useState<string>(() => getSelectedCity());
+  const pickCity = (id: string) => {
+    setSelectedCity(id);
+    setSelectedCityState(id);
+  };
 
   // milestone rewards: refresh the home badge and HUD cash whenever the screen
   // changes or the album closes. Claims happen behind the modal scrim, so the
@@ -87,8 +96,10 @@ export function GameRoot() {
   let content: React.ReactNode;
   switch (screen.name) {
     case 'home': {
-      // play: first unlocked city
-      const playCity = progress.cities.find((c) => c.unlocked);
+      // play: persisted selected city (falls back to first unlocked)
+      const playCity =
+        progress.cities.find((c) => c.id === selectedCity && c.unlocked) ??
+        progress.cities.find((c) => c.unlocked);
       content = (
         <HomeScreen
           onPlay={() =>
@@ -98,11 +109,16 @@ export function GameRoot() {
           }
           onMap={() => {}}
           onAlbum={() => setAlbumOpen(true)}
-          onSelectCity={(cityId) => setScreen({ name: 'rules', city: cityId })}
+          onSelectCity={(cityId) => {
+            pickCity(cityId);
+            setScreen({ name: 'rules', city: cityId });
+          }}
           onEndless={() => setScreen({ name: 'endless', key: 0 })}
           progress={progress}
           rewardsReady={rewardsReady}
           hudTick={hudTick}
+          selectedCity={selectedCity}
+          bgPaused={albumOpen}
         />
       );
       break;
@@ -135,9 +151,19 @@ export function GameRoot() {
           regionId={screen.city}
           title={title}
           onShiftEnd={(result) => {
+            // unlocks are derived from total stars, so diff the unlocked set
+            // to auto-pick a newly unlocked city (manual picks stay sticky).
+            const beforeUnlocked = new Set(
+              progress.cities.filter((c) => c.unlocked).map((c) => c.id),
+            );
             recordShiftResult(screen.city, screen.day, result.stars, result.correct, result.total);
             pityBump(result.sawRare);
             refresh();
+            const after = loadProgress();
+            const newly = after.cities.filter(
+              (c) => c.unlocked && !beforeUnlocked.has(c.id),
+            );
+            if (newly.length > 0) pickCity(newly[newly.length - 1].id);
             setScreen({ name: 'summary', result, city: screen.city, day: screen.day });
           }}
           onQuit={() => {

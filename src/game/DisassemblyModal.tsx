@@ -1,5 +1,4 @@
 import * as Haptics from "expo-haptics";
-import { playCorrect, playWrong } from "../audio/sounds";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Image, StyleSheet, Text, View } from "react-native";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
@@ -8,10 +7,10 @@ import Animated, {
   runOnJS,
   useAnimatedStyle,
   useSharedValue,
-  withSequence,
   withSpring,
   withTiming,
 } from "react-native-reanimated";
+import { playCorrect, playWrong } from "../audio/sounds";
 import {
   BH,
   BIN_BOTTOM,
@@ -310,9 +309,18 @@ export function DisassemblyModal({
 
   // Gestures must be stable across re-renders (e.g. when the sink finishes
   // and BeltScreen re-renders) — otherwise an in-progress drag gets cancelled.
-  const bodyGesture = useMemo(() => chipPan("body", bodyTx, bodyTy, 0, 0, 0, 0, bodyLive), []);
-  const capGesture = useMemo(() => chipPan("cap", capTx, capTy, 0, 0, 0, 0, null), []);
-  const wrapGesture = useMemo(() => chipPan("wrapper", wrapTx, wrapTy, 0, 0, 0, 0, null), []);
+  const bodyGesture = useMemo(
+    () => chipPan("body", bodyTx, bodyTy, 0, 0, 0, 0, bodyLive),
+    [],
+  );
+  const capGesture = useMemo(
+    () => chipPan("cap", capTx, capTy, 0, 0, 0, 0, null),
+    [],
+  );
+  const wrapGesture = useMemo(
+    () => chipPan("wrapper", wrapTx, wrapTy, 0, 0, 0, 0, null),
+    [],
+  );
 
   const capStyle = useAnimatedStyle(() => ({
     transform: [{ translateX: capTx.value }, { translateY: capTy.value }],
@@ -338,31 +346,31 @@ export function DisassemblyModal({
 
         {/* belt ticker: next 3 queued items + red edge on near fall-off */}
         {!paused && (
-        <View style={styles.ticker}>
-          {danger && <View style={styles.tickerDanger} />}
-          <Text style={styles.tickerLabel}>ON THE BELT</Text>
-          <View style={styles.tickerRow}>
-            {(ticker ?? []).map((t, i) =>
-              t ? (
-                <View key={`${t.id}-${i}`} style={styles.tickerItem}>
-                  <View
-                    style={[
-                      styles.tickerDot,
-                      {
-                        backgroundColor: t.color,
-                        borderRadius: t.shape === "circle" ? 12 : 6,
-                      },
-                      t.shape === "diamond" && styles.tickerDiamond,
-                    ]}
-                  />
-                  <Text style={styles.tickerName} numberOfLines={1}>
-                    {t.name}
-                  </Text>
-                </View>
-              ) : null,
-            )}
+          <View style={styles.ticker}>
+            {danger && <View style={styles.tickerDanger} />}
+            <Text style={styles.tickerLabel}>ON THE BELT</Text>
+            <View style={styles.tickerRow}>
+              {(ticker ?? []).map((t, i) =>
+                t ? (
+                  <View key={`${t.id}-${i}`} style={styles.tickerItem}>
+                    <View
+                      style={[
+                        styles.tickerDot,
+                        {
+                          backgroundColor: t.color,
+                          borderRadius: t.shape === "circle" ? 12 : 6,
+                        },
+                        t.shape === "diamond" && styles.tickerDiamond,
+                      ]}
+                    />
+                    <Text style={styles.tickerName} numberOfLines={1}>
+                      {t.name}
+                    </Text>
+                  </View>
+                ) : null,
+              )}
+            </View>
           </View>
-        </View>
         )}
 
         {paused && (
@@ -390,12 +398,10 @@ export function DisassemblyModal({
 
         {/* bottle body (draggable once parts are off; unmounts when sorted) */}
         {!sortedIds.includes("body") && (
-          <GestureDetector
-            gesture={bodyGesture}
-          >
+          <GestureDetector gesture={bodyGesture}>
             <Animated.View
               style={[
-                { position: "absolute", left: BX - 50, top: BY - 120 },
+                { position: "absolute", left: BX - 50, top: BY - 100 },
                 bodyStyle,
               ]}
             >
@@ -418,7 +424,7 @@ export function DisassemblyModal({
               style={{
                 position: "absolute",
                 left: BX - 10,
-                top: BY - 80,
+                top: BY - 60,
                 width: 170,
                 height: 120,
               }}
@@ -427,7 +433,7 @@ export function DisassemblyModal({
         )}
         {step === "prep" && !capGone && (
           <View
-            style={{ position: "absolute", left: SW / 2 - 38, top: BY - 12 }}
+            style={{ position: "absolute", left: SW / 2 - 38, top: BY + 28 }}
           >
             <Pulse size={76} color={C.gold} />
           </View>
@@ -440,7 +446,7 @@ export function DisassemblyModal({
               style={{
                 position: "absolute",
                 left: BX,
-                top: BY + 60,
+                top: BY + 80,
                 width: BW,
                 height: 170,
               }}
@@ -449,7 +455,7 @@ export function DisassemblyModal({
         )}
         {step === "prep" && !wrapGone && (
           <View
-            style={{ position: "absolute", left: SW / 2 - 38, top: BY + 108 }}
+            style={{ position: "absolute", left: SW / 2 - 38, top: BY + 128 }}
           >
             <Pulse size={76} color={C.gold} />
           </View>
@@ -457,15 +463,13 @@ export function DisassemblyModal({
 
         {/* parts chips */}
         {capChip && !sortedIds.includes("cap") && (
-          <GestureDetector
-            gesture={capGesture}
-          >
+          <GestureDetector gesture={capGesture}>
             <Animated.View
               style={[
                 {
                   position: "absolute",
                   left: SW - 200,
-                  top: BY + 125,
+                  top: BY + 145,
                   width: CAP_W,
                   height: CAP_H,
                 },
@@ -483,15 +487,13 @@ export function DisassemblyModal({
           </GestureDetector>
         )}
         {wrapChip && !sortedIds.includes("wrapper") && (
-          <GestureDetector
-            gesture={wrapGesture}
-          >
+          <GestureDetector gesture={wrapGesture}>
             <Animated.View
               style={[
                 {
                   position: "absolute",
                   left: 20,
-                  top: BY + 85,
+                  top: BY + 105,
                   width: 120,
                   height: 131,
                 },
@@ -545,7 +547,7 @@ const styles = StyleSheet.create({
   modalContent: { position: "absolute", left: 0, right: 0, top: 0, bottom: 0 },
   stepKicker: {
     textAlign: "center",
-    marginTop: 74,
+    marginTop: 175,
     fontSize: 12,
     fontWeight: "700",
     letterSpacing: 2,
