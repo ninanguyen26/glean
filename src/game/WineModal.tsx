@@ -29,7 +29,7 @@ import {
 import { hitBinPoint } from "./binHit";
 import { BinId, BINS, ItemDef, PartDef } from "./items";
 import { SINK_RECT } from "./SinkView";
-import { BIN_SPRITES, WINE_CAPSULE } from "./sprites";
+import { BIN_SPRITES, WINE_CAPSULE, WINE_NO_CAPSULE } from "./sprites";
 import {
   SpriteWine,
   WINE_CAPSULE_H,
@@ -81,7 +81,7 @@ export function WineModal({
   parts: PartDef[];
   itemId?: string;
   dirty: boolean;
-  onPartSink: (x: number, y: number) => void;
+  onPartSink: (x: number, y: number, spriteOverride?: any) => void;
   onClose: (allCorrect: boolean) => void;
 }) {
   const binIndex = (b: BinId) => BINS.findIndex((x) => x.id === b);
@@ -204,7 +204,7 @@ export function WineModal({
     setTimeout(() => setBursts((b) => b.filter((bb) => bb.id !== bid)), 750);
     setHint(null);
     setSortedIds((s) => (s.includes(id) ? s : [...s, id]));
-    onPartSink(x, y);
+    onPartSink(x, y, WINE_NO_CAPSULE);
   };
 
   const bottleNeedsRinse = () => {

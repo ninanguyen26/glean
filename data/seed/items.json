@@ -90,6 +90,8 @@
     {"id":"brolly","region":"uk","name":"Broken brolly","bin":"landfill","color":"#2E2A26","shape":"diamond","signature":true},
     {"id":"parcel-box","region":"uk","name":"Parcel box","bin":"recycle","color":"#C9A06B","shape":"rect","signature":true},
     {"id":"tea-tin","region":"uk","name":"Tea tin","bin":"recycle","color":"#D95F4B","shape":"circle","signature":true},
-    {"id":"wet-newspaper","region":"universal","name":"Soggy newspaper","bin":"landfill","color":"#8A9498","shape":"rect","tricky":true,"teaching":"Wet paper can't be recycled."}
+    {"id":"wet-newspaper","region":"universal","name":"Soggy newspaper","bin":"landfill","color":"#8A9498","shape":"rect","tricky":true,"teaching":"Wet paper can't be recycled."},
+    {"id":"aluminum-foil","region":"universal","name":"Aluminum foil","bin":"recycle","color":"#C0CBD2","shape":"rect","complex":true,"mechanic":"crumple","tricky":true,"teaching":"Ball it up first — flat sheets fall through the screens."},
+    {"id":"paper-clips","region":"universal","name":"Paper clips","bin":"landfill","color":"#9AA3A8","shape":"diamond","tricky":true,"teaching":"Too small — they fall through the screens."}
   ]
 }

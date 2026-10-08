@@ -15,16 +15,18 @@ export function ItemGlyph({
   def,
   size = 56,
   silhouette = false,
+  sprite,
 }: {
   def: ItemDef;
   size?: number;
   silhouette?: boolean;
+  sprite?: any;
 }) {
-  const sprite = ITEM_SPRITES[def.id];
-  if (sprite) {
+  const src = sprite ?? ITEM_SPRITES[def.id];
+  if (src) {
     return (
       <Image
-        source={sprite}
+        source={src}
         style={{
           width: size,
           height: size,

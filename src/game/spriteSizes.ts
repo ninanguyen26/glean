@@ -26,6 +26,8 @@ export const SPRITE_TUNING: Record<
   "cig-butt": { size: 72, dx: 0, dy: 0 },
   "cig-butts": { size: 72, dx: 0, dy: 0 },
   "broken-pen": { size: 72, dx: 0, dy: 0 },
+  "aluminum-foil": { size: 72, dx: 0, dy: 0 },
+  "paper-clips": { size: 72, dx: 0, dy: 0 },
   // ── portland ──
   "pizza-box": { size: 72, dx: 0, dy: 0 },
   "yard-debris": { size: 72, dx: 0, dy: 0 },

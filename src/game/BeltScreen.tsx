@@ -22,7 +22,6 @@ import Animated, {
   withTiming,
 } from "react-native-reanimated";
 import { playCorrect, playSinkDrop, playTap, playWrong } from "../audio/sounds";
-import { tapFeedback } from "./feel";
 import { palette } from "../constants/theme";
 import {
   BIN_BOTTOM,
@@ -52,6 +51,8 @@ import {
 } from "./db";
 import { DetergentModal } from "./DetergentModal";
 import { DisassemblyModal } from "./DisassemblyModal";
+import { FoilModal } from "./FoilModal";
+import { tapFeedback } from "./feel";
 import { ItemGlyph } from "./ItemGlyph";
 import { BINS, GameItem, ItemDef } from "./items";
 import { LifetimeHud } from "./LifetimeHud";
@@ -108,14 +109,15 @@ const ITEM_Y = BELT_TOP + (BELT_H - ITEM_S) / 2;
 const SPAWN_X = SW + 40;
 const MISS_X = -ITEM_S - 24;
 const DANGER_X = 70;
-const SPEED = 110; // pt/s
+const SPEED = 110; // pt/s (endless)
+const SHIFT_SPEED = 130; // pt/s (shift mode — belt pauses for modals)
 const SPAWN_MS = 2600;
 const SHIFT_ITEMS = 20;
 const CHEV_GAP = 44;
 const ENDLESS_LIVES = 3;
 
-// DEBUG: spawn only wine bottles (testing the capsule modal)
-const DEBUG_DETERGENT_ONLY = true;
+// DEBUG: spawn only foil (testing the crumple modal)
+const DEBUG_FOIL_ONLY = true;
 
 // work area: sink top-left, a row of 4 rack slots below it, prep tray
 // right (3:4); the tray doubles as the bottle prep drop zone
@@ -159,6 +161,9 @@ function BeltItem({
   onCleanHint,
   onBothHint,
   onTwistFirstHint,
+  onRackFullHint,
+  rackFull,
+  speed,
 }: {
   itemKey: number;
   def: ItemDef;
@@ -189,6 +194,9 @@ function BeltItem({
   onCleanHint: () => void;
   onBothHint: () => void;
   onTwistFirstHint: () => void;
+  onRackFullHint: () => void;
+  rackFull: boolean;
+  speed: number;
 }) {
   const bx = useSharedValue(SPAWN_X);
   const dx = useSharedValue(0);
@@ -202,7 +210,7 @@ function BeltItem({
     if (dist <= 0) return;
     bx.value = withTiming(
       MISS_X,
-      { duration: (dist / SPEED) * 1000, easing: Easing.linear },
+      { duration: (dist / speed) * 1000, easing: Easing.linear },
       (finished) => {
         if (finished && !settled.value) {
           settled.value = true;
@@ -294,8 +302,13 @@ function BeltItem({
       if (def.complex && def.needsRinse) {
         if (def.mechanic === "twist") {
           if (prepHit) {
-            settled.value = true;
-            runOnJS(onPrep)(itemKey, def, cx, cy, true);
+            if (rackFull) {
+              bounce();
+              runOnJS(onRackFullHint)();
+            } else {
+              settled.value = true;
+              runOnJS(onPrep)(itemKey, def, cx, cy, true);
+            }
           } else {
             bounce();
             if (sinkHit) runOnJS(onTwistFirstHint)();
@@ -304,11 +317,21 @@ function BeltItem({
           return;
         }
         if (prepHit) {
-          settled.value = true;
-          runOnJS(onPrep)(itemKey, def, cx, cy, true);
+          if (rackFull) {
+            bounce();
+            runOnJS(onRackFullHint)();
+          } else {
+            settled.value = true;
+            runOnJS(onPrep)(itemKey, def, cx, cy, true);
+          }
         } else if (sinkHit) {
-          settled.value = true;
-          runOnJS(onSink)(itemKey, def.id, cx, cy);
+          if (rackFull) {
+            bounce();
+            runOnJS(onRackFullHint)();
+          } else {
+            settled.value = true;
+            runOnJS(onSink)(itemKey, def.id, cx, cy);
+          }
         } else {
           bounce();
           if (binHit >= 0) runOnJS(onBothHint)();
@@ -328,8 +351,13 @@ function BeltItem({
       }
       if (def.needsRinse) {
         if (sinkHit) {
-          settled.value = true;
-          runOnJS(onSink)(itemKey, def.id, cx, cy);
+          if (rackFull) {
+            bounce();
+            runOnJS(onRackFullHint)();
+          } else {
+            settled.value = true;
+            runOnJS(onSink)(itemKey, def.id, cx, cy);
+          }
         } else {
           bounce();
           if (binHit >= 0) runOnJS(onRinseHint)();
@@ -380,6 +408,7 @@ export function BeltScreen({
   onShiftEnd: (r: ShiftResult) => void;
   onQuit: () => void;
 }) {
+  const beltSpeed = endless ? SPEED : SHIFT_SPEED;
   const [pool, setPool] = useState<GameItem[] | null>(null);
   const [items, setItems] = useState<{ key: number; def: ItemDef }[]>([]);
   const [resolved, setResolved] = useState(0);
@@ -455,7 +484,7 @@ export function BeltScreen({
       // texture scroll: one screen width per loop, synced to item speed
       beltTex.value = withRepeat(
         withTiming(-SW, {
-          duration: (SW / SPEED) * 1000,
+          duration: (SW / beltSpeed) * 1000,
           easing: Easing.linear,
         }),
         -1,
@@ -492,13 +521,14 @@ export function BeltScreen({
   }, [regionKey]);
 
   // random draw from the spawnable pool (complex items only once their
-  // mechanic exists; the bottle's twist-peel and the cup's lid-sleeve do)
+  // mechanic exists; twist-peel, lid-sleeve and crumple do)
   const drawFromPool = (p: GameItem[]): GameItem => {
     const spawnable = p.filter(
       (it) =>
         !it.complex ||
         it.mechanic === "twist-peel" ||
-        it.mechanic === "lid-sleeve",
+        it.mechanic === "lid-sleeve" ||
+        it.mechanic === "crumple",
     );
     let i = Math.floor(Math.random() * spawnable.length);
     if (i === lastDrawRef.current) i = (i + 1) % spawnable.length;
@@ -519,9 +549,9 @@ export function BeltScreen({
 
   const buildQueue = (p: GameItem[], n: number): GameItem[] => {
     const q: GameItem[] = [];
-    const detergent = p.find((it) => it.id === "detergent-bottle");
-    if (DEBUG_DETERGENT_ONLY && detergent) {
-      for (let i = 0; i < n; i++) q.push(detergent);
+    const foil = p.find((it) => it.id === "aluminum-foil");
+    if (DEBUG_FOIL_ONLY && foil) {
+      for (let i = 0; i < n; i++) q.push(foil);
       return q;
     }
     const bottle = p.find((it) => it.id === "bottle");
@@ -539,7 +569,7 @@ export function BeltScreen({
     streakMilestonesRef.current = new Set();
     queueRef.current = buildQueue(pool, SHIFT_ITEMS);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [runId, pool, DEBUG_DETERGENT_ONLY]);
+  }, [runId, pool, DEBUG_FOIL_ONLY]);
 
   // spawner (dead while the belt is paused for learning; refills in endless)
   useEffect(() => {
@@ -736,7 +766,7 @@ export function BeltScreen({
   const modalSinkDropRef = useRef(false);
   const pendingBothRef = useRef<{ allCorrect: boolean } | null>(null);
   const sinkKeyRef = useRef(100000);
-  const handlePartSink = (x: number, y: number) => {
+  const handlePartSink = (x: number, y: number, spriteOverride?: any) => {
     const m = modal;
     if (!m) return;
     const item: SinkItem = {
@@ -745,6 +775,7 @@ export function BeltScreen({
       seq: seqRef.current++,
       status: "queued",
       prepped: true,
+      spriteOverride,
     };
     setSinkItems((prev) => pumpSink([...prev, item]));
     modalSinkDropRef.current = true;
@@ -899,6 +930,8 @@ export function BeltScreen({
   const handleBothHint = () => setHint("Prep or rinse it first");
   const handleTwistFirstHint = () =>
     setHint("Twist the cap off first — drop it in the Prep tray");
+  const handleRackFullHint = () =>
+    setHint("Rack is full — sort the clean items first");
 
   const chevStyle = useAnimatedStyle(() => ({
     transform: [{ translateX: scroll.value }],
@@ -921,6 +954,7 @@ export function BeltScreen({
     sinkItems.length > 0;
 
   const rackItems = sinkItems.filter((i) => i.status === "rack");
+  const rackFull = rackItems.length >= RACK_CAP;
 
   // seasonal reskin v1: cooler backdrop while a season is live
   const activeSeason = getActiveSeason();
@@ -1109,6 +1143,9 @@ export function BeltScreen({
           onCleanHint={handleCleanHint}
           onBothHint={handleBothHint}
           onTwistFirstHint={handleTwistFirstHint}
+          onRackFullHint={handleRackFullHint}
+          rackFull={rackFull}
+          speed={beltSpeed}
         />
       ))}
 
@@ -1150,7 +1187,7 @@ export function BeltScreen({
         <Burst key={bb.id} x={bb.x} y={bb.y} />
       ))}
 
-      {/* disassembly modal (coffee cup gets its own lid-sleeve modal, wine gets capsule) */}
+      {/* disassembly modal (each mechanic gets its own: lid-sleeve, capsule, twist, crumple) */}
       {modal &&
         (modal.item.mechanic === "lid-sleeve" ? (
           <CoffeeCupModal
@@ -1186,6 +1223,15 @@ export function BeltScreen({
             onPartSink={handlePartSink}
             onClose={handleModalClose}
           />
+        ) : modal.item.mechanic === "crumple" ? (
+          <FoilModal
+            origin={{ x: modal.x, y: modal.y }}
+            paused={modal.paused}
+            ticker={queueRef.current.slice(0, 3)}
+            danger={danger}
+            item={modal.item}
+            onClose={handleModalClose}
+          />
         ) : (
           <DisassemblyModal
             origin={{ x: modal.x, y: modal.y }}
@@ -1206,18 +1252,22 @@ export function BeltScreen({
               onPress={() => setUserPaused(false)}
               style={styles.pauseButton}
             >
-              <Image
-                source={ICON_RESUME}
-                style={styles.pauseButtonImg}
-                resizeMode="contain"
-              />
+              <View style={styles.pauseButtonCrop}>
+                <Image
+                  source={ICON_RESUME}
+                  style={styles.pauseButtonImg}
+                  resizeMode="contain"
+                />
+              </View>
             </Pressable>
             <Pressable onPress={doQuit} style={styles.pauseButton}>
-              <Image
-                source={ICON_QUIT}
-                style={styles.pauseButtonImg}
-                resizeMode="contain"
-              />
+              <View style={styles.pauseButtonCrop}>
+                <Image
+                  source={ICON_QUIT}
+                  style={styles.pauseButtonImg}
+                  resizeMode="contain"
+                />
+              </View>
             </Pressable>
           </View>
         </View>
@@ -1301,7 +1351,7 @@ const styles = StyleSheet.create({
     position: "absolute",
     left: 0,
     right: 0,
-    top: -90,
+    top: 0,
     bottom: 0,
     backgroundColor: "rgba(0, 0, 0, 0.45)",
     justifyContent: "center",
@@ -1320,9 +1370,15 @@ const styles = StyleSheet.create({
   pauseButton: {
     marginTop: 1,
   },
+  pauseButtonCrop: {
+    width: 180,
+    height: 108,
+    overflow: "hidden",
+  },
   pauseButtonImg: {
     width: 180,
     height: 180,
+    marginTop: -36,
   },
   hintWrap: {
     position: "absolute",

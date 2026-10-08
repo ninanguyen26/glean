@@ -10,7 +10,6 @@ import { getSetting } from './db';
 import { setHapticsMuted } from './feel';
 import { C } from '../spike/effects';
 import { HomeScreen } from './HomeScreen';
-import { MapScreen } from './MapScreen';
 import { RulesScreen } from './RulesScreen';
 import { SummaryScreen } from './SummaryScreen';
 import { AlbumScreen } from './AlbumScreen';
@@ -31,7 +30,6 @@ import {
 
 type Screen =
   | { name: 'home' }
-  | { name: 'map' }
   | { name: 'rules'; city: string }
   | { name: 'shift'; city: string; day: number; key: number }
   | { name: 'endless'; key: number }
@@ -89,33 +87,26 @@ export function GameRoot() {
   let content: React.ReactNode;
   switch (screen.name) {
     case 'home': {
-      // play: first unlocked city with an incomplete week
-      const playCity = progress.cities.find((c) => c.unlocked && c.nextDay <= 5);
+      // play: first unlocked city
+      const playCity = progress.cities.find((c) => c.unlocked);
       content = (
         <HomeScreen
           onPlay={() =>
             playCity
               ? setScreen({ name: 'rules', city: playCity.id })
-              : setScreen({ name: 'map' })
+              : undefined
           }
-          onMap={() => setScreen({ name: 'map' })}
+          onMap={() => {}}
           onAlbum={() => setAlbumOpen(true)}
+          onSelectCity={(cityId) => setScreen({ name: 'rules', city: cityId })}
+          onEndless={() => setScreen({ name: 'endless', key: 0 })}
+          progress={progress}
           rewardsReady={rewardsReady}
           hudTick={hudTick}
         />
       );
       break;
     }
-    case 'map':
-      content = (
-        <MapScreen
-          progress={progress}
-          onSelectCity={(cityId) => setScreen({ name: 'rules', city: cityId })}
-          onEndless={() => setScreen({ name: 'endless', key: 0 })}
-          onAlbum={() => setAlbumOpen(true)}
-        />
-      );
-      break;
     case 'rules': {
       const region = getRegionDef(screen.city);
       const p = progress.cities.find((c) => c.id === screen.city)!;

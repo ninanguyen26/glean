@@ -17,6 +17,7 @@ import Animated, {
 import { playTap } from "../audio/sounds";
 import { palette } from "../constants/theme";
 import { LifetimeHud } from "./LifetimeHud";
+import { MapScreen } from "./MapScreen";
 import { SettingsModal } from "./SettingsModal";
 import { tapFeedback } from "./feel";
 import {
@@ -34,15 +35,23 @@ export function HomeScreen({
   onPlay,
   onMap,
   onAlbum,
+  onSelectCity,
+  onEndless,
+  progress,
   rewardsReady,
+  hudTick,
 }: {
   onPlay: () => void;
   onMap: () => void;
   onAlbum: () => void;
+  onSelectCity: (cityId: string) => void;
+  onEndless: () => void;
+  progress: any;
   rewardsReady: boolean;
   hudTick: number; // refresh token: bumps whenever HUD values may have changed
 }) {
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [mapOpen, setMapOpen] = useState(false);
   // 8-frame MRF background loop (12fps)
   const [frame, setFrame] = useState(0);
   useEffect(() => {
@@ -87,7 +96,7 @@ export function HomeScreen({
     >
       <View style={styles.topRow}>
         <View style={styles.hud}>
-          <LifetimeHud />
+          <LifetimeHud key={hudTick} />
         </View>
         <Pressable
           style={styles.settings}
@@ -131,7 +140,7 @@ export function HomeScreen({
             onPress={() => {
               tapFeedback();
               playTap();
-              onMap();
+              setMapOpen(true);
             }}
             style={styles.menuButton}
           >
@@ -141,7 +150,7 @@ export function HomeScreen({
               resizeMode="contain"
             />
           </Pressable>
-          <Text style={styles.menuLabel}>MAP</Text>
+          <Text style={styles.menuLabel}>MODES</Text>
         </View>
         <View style={styles.menuItem}>
           <Pressable
@@ -168,6 +177,20 @@ export function HomeScreen({
       </View>
 
       {settingsOpen && <SettingsModal onClose={() => setSettingsOpen(false)} />}
+      {mapOpen && (
+        <MapScreen
+          progress={progress}
+          onSelectCity={(cityId) => {
+            setMapOpen(false);
+            onSelectCity(cityId);
+          }}
+          onEndless={() => {
+            setMapOpen(false);
+            onEndless();
+          }}
+          onClose={() => setMapOpen(false)}
+        />
+      )}
     </ImageBackground>
   );
 }
@@ -204,7 +227,7 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "flex-start",
     gap: 56,
-    paddingBottom: 110,
+    paddingBottom: 120,
   },
   menuItem: {
     alignItems: "center",
@@ -232,7 +255,6 @@ const styles = StyleSheet.create({
     fontSize: 11,
     letterSpacing: 1.5,
     color: palette.bark,
-    marginTop: 1,
   },
   rewardBadge: {
     position: "absolute",

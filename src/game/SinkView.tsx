@@ -80,6 +80,7 @@ export interface SinkItem {
   seq: number;
   status: SinkStatus;
   prepped?: boolean; // true if it went through a prep modal before the sink
+  spriteOverride?: any; // post-prep body sprite (e.g. cap removed)
 }
 
 /* Pie timer: the circle is divided into 4 quadrants (cross dividers) and
@@ -191,14 +192,18 @@ export function SinkBasin({
         <View style={styles.rinsing}>
           <RinsePie progress={progress} size={68} />
           <View style={styles.glyph}>
-            <ItemGlyph def={rinsing.def} size={36} />
+            <ItemGlyph
+              def={rinsing.def}
+              size={36}
+              sprite={rinsing.spriteOverride}
+            />
           </View>
         </View>
       ) : null}
       <View style={styles.queue}>
         {queued.slice(0, 3).map((q) => (
           <View key={q.key} style={styles.qGlyph}>
-            <ItemGlyph def={q.def} size={26} />
+            <ItemGlyph def={q.def} size={26} sprite={q.spriteOverride} />
           </View>
         ))}
         {queued.length > 3 && (
@@ -206,7 +211,7 @@ export function SinkBasin({
         )}
         {done.map((d) => (
           <View key={d.key} style={styles.qGlyph}>
-            <ItemGlyph def={d.def} size={26} />
+            <ItemGlyph def={d.def} size={26} sprite={d.spriteOverride} />
             <Text style={styles.doneCheck}>✓</Text>
           </View>
         ))}
@@ -299,7 +304,11 @@ export function RackSlot({
       {item ? (
         <GestureDetector gesture={pan}>
           <Animated.View style={[styles.rackInner, dragStyle]}>
-            <ItemGlyph def={item.def} size={42} />
+            <ItemGlyph
+              def={item.def}
+              size={42}
+              sprite={item.spriteOverride}
+            />
           </Animated.View>
         </GestureDetector>
       ) : (

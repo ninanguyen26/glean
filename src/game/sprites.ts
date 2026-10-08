@@ -50,6 +50,8 @@ export const ITEM_SPRITES: Record<string, any> = {
   'candy-wrapper': require('../../assets/sprites/candy-wrapper.png'),
   headphones: require('../../assets/sprites/headphones.png'),
   'wet-newspaper': require('../../assets/sprites/uni-wet-news.png'),
+  'aluminum-foil': require('../../assets/sprites/aluminum-foil.png'),
+  'paper-clips': require('../../assets/sprites/paper-clips.png'),
   'wine-bottle': require('../../assets/sprites/wine-full.png'),
   // fall seasonal (15 items, incl. the -1 pair entries)
   acorn: require('../../assets/sprites/seasonal/fall/acorn.png'),
@@ -157,3 +159,5 @@ export const WINE_NO_CAPSULE = require('../../assets/sprites/wine-no-capsule.png
 export const DETERGENT_FULL = require('../../assets/sprites/detergent-full.png');
 export const DETERGENT_CAP = require('../../assets/sprites/detergent-cap.png');
 export const DETERGENT_BODY = require('../../assets/sprites/detergent-body.png');
+// foil crumple modal: balled-up state sprite
+export const FOIL_BALL = require('../../assets/sprites/foil-ball.png');

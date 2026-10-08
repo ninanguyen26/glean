@@ -45,8 +45,8 @@ const STREAM_ITEMS: Record<string, string> = {
 };
 
 const HOUSE_RULES = [
-  "Rinse jars & cans before they recycle",
-  "Bottles go to PREP first — cap off, label off, then sort the parts",
+  "Give dirty containers a rinse in the SINK",
+  "Take multi-part items to PREP and pull them apart",
 ];
 
 export function RulesScreen({
@@ -265,8 +265,7 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     borderWidth: 3,
     borderColor: palette.bark,
-    padding: 20,
-    height: 530,
+    padding: 21,
     shadowColor: "#000",
     shadowOpacity: 0.08,
     shadowRadius: 10,
@@ -312,16 +311,16 @@ const styles = StyleSheet.create({
   streamName: { fontSize: 16, fontWeight: "800", color: C.ink },
   streamItems: {
     fontSize: 12,
-    color: C.sub,
-    fontWeight: "600",
+    color: C.ink,
+    fontWeight: "500",
     marginTop: 4,
     lineHeight: 18,
   },
   divider: {
     borderBottomWidth: 1,
     borderStyle: "dashed",
-    borderColor: "#D8C9AE",
-    marginVertical: 6,
+    borderColor: palette.fog,
+    paddingBottom: 4,
   },
   rulesHeader: {
     flexDirection: "row",
@@ -336,8 +335,8 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: C.ink,
     marginTop: 8,
-    fontWeight: "600",
-    lineHeight: 22,
+    fontWeight: "500",
+    lineHeight: 18,
   },
   start: {
     alignItems: "center",

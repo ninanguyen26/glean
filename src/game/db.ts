@@ -16,7 +16,7 @@ const SEED: GameItem[] = require('../../data/seed/items.json').items.map((it: an
   funFact: FUN_FACTS[it.id] ?? undefined,
 }));
 const REGION_SEED: RegionDef[] = require('../../data/seed/regions.json').regions;
-const DB_VERSION = 18;
+const DB_VERSION = 19;
 
 export interface SeasonItemSeed {
   id: string;

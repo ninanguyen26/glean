@@ -33,6 +33,7 @@ const PREP_LINES: Record<string, string> = {
     "PREP first: pull the capsule off, rinse the bottle, then sort the parts.",
   twist:
     "PREP first: twist the cap off, rinse the bottle, then sort the parts.",
+  crumple: "PREP first: tap 3 times to ball up the foil, then sort it.",
 };
 
 function RuleRow({ text }: { text: string }) {
