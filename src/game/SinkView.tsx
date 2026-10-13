@@ -304,11 +304,7 @@ export function RackSlot({
       {item ? (
         <GestureDetector gesture={pan}>
           <Animated.View style={[styles.rackInner, dragStyle]}>
-            <ItemGlyph
-              def={item.def}
-              size={42}
-              sprite={item.spriteOverride}
-            />
+            <ItemGlyph def={item.def} size={42} sprite={item.spriteOverride} />
           </Animated.View>
         </GestureDetector>
       ) : (
@@ -383,6 +379,7 @@ const styles = StyleSheet.create({
     borderStyle: "dashed",
     borderColor: palette.gold,
     backgroundColor: palette.oat,
+    bottom: 10,
   },
   rackInner: {
     width: "100%",

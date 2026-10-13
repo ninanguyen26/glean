@@ -148,6 +148,7 @@ export const BIN_SPRITES: Record<string, any> = {
 export const BELT_BG = require('../../assets/extra/belt.png');
 
 export const HOME_BG = require('../../assets/background/home-background.png');
+export const SUPERVISOR_AVATAR = require('../../assets/extra/supervisor_avatar.png');
 
 // home background animation: 8-frame MRF loop
 export const HOME_BG_FRAMES = [

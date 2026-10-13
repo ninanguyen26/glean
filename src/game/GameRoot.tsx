@@ -6,10 +6,11 @@ import {
   setMusicMuted,
   setSoundMuted,
 } from '../audio/sounds';
-import { getSetting } from './db';
+import { getSetting, setSetting } from './db';
 import { setHapticsMuted } from './feel';
 import { palette } from '../constants/theme';
 import { HomeScreen } from './HomeScreen';
+import { OnboardingScreen } from './OnboardingScreen';
 import { RulesScreen } from './RulesScreen';
 import { SummaryScreen } from './SummaryScreen';
 import { AlbumScreen } from './AlbumScreen';
@@ -31,6 +32,7 @@ import {
    The album is a modal overlay, not a screen, so home/map stays behind it. */
 
 type Screen =
+  | { name: 'onboarding' }
   | { name: 'home' }
   | { name: 'rules'; city: string }
   | { name: 'shift'; city: string; day: number; key: number }
@@ -38,7 +40,9 @@ type Screen =
   | { name: 'summary'; result: ShiftResult; city: string | null; day: number };
 
 export function GameRoot() {
-  const [screen, setScreen] = useState<Screen>({ name: 'home' });
+  const [screen, setScreen] = useState<Screen>(() =>
+    getSetting('onboarding_seen') === '1' ? { name: 'home' } : { name: 'onboarding' },
+  );
   const [progress, setProgress] = useState<ProgressSnapshot | null>(null);
   const [albumOpen, setAlbumOpen] = useState(false);
   const [rewardsReady, setRewardsReady] = useState(false);
@@ -95,6 +99,17 @@ export function GameRoot() {
 
   let content: React.ReactNode;
   switch (screen.name) {
+    case 'onboarding': {
+      content = (
+        <OnboardingScreen
+          onDone={() => {
+            setSetting('onboarding_seen', '1');
+            setScreen({ name: 'home' });
+          }}
+        />
+      );
+      break;
+    }
     case 'home': {
       // play: persisted selected city (falls back to first unlocked)
       const playCity =
