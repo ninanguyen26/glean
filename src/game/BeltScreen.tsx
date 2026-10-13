@@ -1,5 +1,5 @@
 import * as Haptics from "expo-haptics";
-import { useEffect, useRef, useState, memo } from "react";
+import { memo, useEffect, useRef, useState } from "react";
 import {
   Image,
   ImageBackground,
@@ -56,6 +56,7 @@ import { FoilModal } from "./FoilModal";
 import { ItemGlyph } from "./ItemGlyph";
 import { BINS, GameItem, ItemDef } from "./items";
 import { LifetimeHud } from "./LifetimeHud";
+import { SettingsModal } from "./SettingsModal";
 import {
   basinRect,
   RACK_CAP,
@@ -73,6 +74,7 @@ import {
   ICON_PAUSE,
   ICON_QUIT,
   ICON_RESUME,
+  ICON_SETTINGS,
   ICON_SPRING,
   ICON_STREAK,
   ICON_SUMMER,
@@ -102,7 +104,8 @@ export interface ShiftResult {
   newBest?: boolean;
 }
 
-const BELT_TOP = 220;
+const PLAYFIELD_DROP = 42;
+const BELT_TOP = 220 + PLAYFIELD_DROP;
 const BELT_H = 320;
 const ITEM_S = 80;
 const ITEM_Y = BELT_TOP + (BELT_H - ITEM_S) / 2;
@@ -121,12 +124,15 @@ const DEBUG_SEASONAL_ONLY = true;
 
 // work area: sink top-left, a row of 4 rack slots below it, prep tray
 // right (3:4); the tray doubles as the bottle prep drop zone
-const PREP = {
-  x: TRAY_RECT.x,
-  y: TRAY_RECT.y,
-  w: TRAY_RECT.w,
-  h: TRAY_RECT.h,
-};
+const shiftDown = <T extends { y: number }>(rect: T): T => ({
+  ...rect,
+  y: rect.y + PLAYFIELD_DROP,
+});
+
+const PREP = shiftDown(TRAY_RECT);
+const SINK_DROP_RECT = shiftDown(basinRect);
+const SINK_ART_RECT = shiftDown(SINK_RECT);
+const TRAY_ART_RECT = shiftDown(TRAY_RECT);
 
 // absolute-fill style for a zone rect
 const zoneStyle = (r: { x: number; y: number; w: number; h: number }) => ({
@@ -148,6 +154,7 @@ function BeltItem({
   def,
   binRects,
   prepRect,
+  sinkRect,
   paused,
   onDrop,
   onMissed,
@@ -169,6 +176,7 @@ function BeltItem({
   def: ItemDef;
   binRects: any;
   prepRect: BinRect;
+  sinkRect: BinRect;
   paused: boolean;
   onDrop: (
     key: number,
@@ -268,7 +276,7 @@ function BeltItem({
 
   const hitSink = (cx: number, cy: number) => {
     "worklet";
-    const r = basinRect;
+    const r = sinkRect;
     return (
       cx >= r.x - 8 &&
       cx <= r.x + r.w + 8 &&
@@ -530,6 +538,7 @@ export function BeltScreen({
   const [danger, setDanger] = useState(false);
   const [sinkItems, setSinkItems] = useState<SinkItem[]>([]);
   const [userPaused, setUserPaused] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
   const quitRef = useRef(false);
   const streakMilestonesRef = useRef<Set<number>>(new Set());
 
@@ -555,12 +564,12 @@ export function BeltScreen({
   const scroll = useSharedValue(0);
 
   // derived, never separate state: paused for learning modals or by the user
-  const beltPaused = (modal?.paused ?? false) || userPaused;
+  const beltPaused = (modal?.paused ?? false) || userPaused || settingsOpen;
 
   useEffect(() => {
     binRects.value = [0, 1, 2].map((i) => ({
       x: binX(i),
-      y: binY,
+      y: binY + PLAYFIELD_DROP,
       w: BIN_W,
       h: BIN_H,
     }));
@@ -1107,26 +1116,43 @@ export function BeltScreen({
           resizeMode="cover"
         />
       )}
-      {/* top row: lifetime numbers + pause */}
+      {/* top row: lifetime numbers + controls */}
       <View style={styles.topRow}>
         <View style={styles.lifetimeHud}>
           <LifetimeHud />
         </View>
-        <Pressable
-          onPress={() => {
-            tapFeedback();
-            playTap();
-            setUserPaused(true);
-          }}
-          hitSlop={10}
-          style={styles.pauseBtn}
-        >
-          <Image
-            source={ICON_PAUSE}
-            style={styles.pauseIcon}
-            resizeMode="contain"
-          />
-        </Pressable>
+        <View style={styles.topActions}>
+          <Pressable
+            onPress={() => {
+              tapFeedback();
+              playTap();
+              setSettingsOpen(true);
+            }}
+            hitSlop={8}
+            style={styles.settingsBtn}
+          >
+            <Image
+              source={ICON_SETTINGS}
+              style={styles.settingsIcon}
+              resizeMode="contain"
+            />
+          </Pressable>
+          <Pressable
+            onPress={() => {
+              tapFeedback();
+              playTap();
+              setUserPaused(true);
+            }}
+            hitSlop={10}
+            style={styles.pauseBtn}
+          >
+            <Image
+              source={ICON_PAUSE}
+              style={styles.pauseIcon}
+              resizeMode="contain"
+            />
+          </Pressable>
+        </View>
       </View>
       {/* shift HUD (bottom block) */}
       <View style={styles.shiftBlock}>
@@ -1196,7 +1222,7 @@ export function BeltScreen({
           position: "absolute",
           left: 0,
           right: 0,
-          top: 440,
+          top: 440 + PLAYFIELD_DROP,
           bottom: 0,
         }}
         resizeMode="cover"
@@ -1228,12 +1254,12 @@ export function BeltScreen({
       {/* work area art backdrops (sink + prep tray) */}
       <Image
         source={sinkItems.length > 0 ? SINK_ON_IMG : SINK_IMG}
-        style={[zoneStyle(SINK_RECT), styles.artShadow]}
+        style={[zoneStyle(SINK_ART_RECT), styles.artShadow]}
         resizeMode="contain"
       />
       <Image
         source={TRAY_IMG}
-        style={[zoneStyle(TRAY_RECT), styles.artShadow]}
+        style={[zoneStyle(TRAY_ART_RECT), styles.artShadow]}
         resizeMode="contain"
       />
 
@@ -1245,6 +1271,7 @@ export function BeltScreen({
           def={it.def}
           binRects={binRects}
           prepRect={PREP}
+          sinkRect={SINK_DROP_RECT}
           paused={beltPaused}
           onDrop={handleDrop}
           onMissed={handleMissed}
@@ -1268,7 +1295,8 @@ export function BeltScreen({
       <SinkBasin
         items={sinkItems}
         onRinseDone={handleRinseDone}
-        paused={userPaused}
+        paused={beltPaused}
+        yOffset={PLAYFIELD_DROP}
       />
 
       {/* rack slots render on the drying-rack section */}
@@ -1281,6 +1309,7 @@ export function BeltScreen({
           onCleanDrop={handleRackDrop}
           onPrepDrop={handleRackPrep}
           onPrepHint={handleBottleNeedsPrep}
+          yOffset={PLAYFIELD_DROP}
         />
       ))}
 
@@ -1341,6 +1370,7 @@ export function BeltScreen({
           </View>
         </View>
       )}
+      {settingsOpen && <SettingsModal onClose={() => setSettingsOpen(false)} />}
     </View>
   );
 }
@@ -1355,7 +1385,12 @@ const styles = StyleSheet.create({
   },
   winterRoot: { backgroundColor: "#EDF1F6" },
   loadingWrap: { justifyContent: "center", alignItems: "center" },
-  loading: { fontFamily: "BalsamiqSans_700Bold", fontSize: 17, fontWeight: "700", color: palette.fog },
+  loading: {
+    fontFamily: "BalsamiqSans_700Bold",
+    fontSize: 17,
+    fontWeight: "700",
+    color: palette.fog,
+  },
   topRow: {
     flexDirection: "row",
     justifyContent: "space-between",
@@ -1365,6 +1400,19 @@ const styles = StyleSheet.create({
   lifetimeHud: {
     height: 36,
     justifyContent: "center",
+  },
+  topActions: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 1,
+  },
+  settingsIcon: {
+    width: 42,
+    height: 42,
+    shadowColor: "#2E241C",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.4,
+    shadowRadius: 2,
   },
   pauseBtn: {
     padding: 4,
@@ -1528,7 +1576,7 @@ const styles = StyleSheet.create({
     position: "absolute",
     left: 0,
     right: 0,
-    bottom: BIN_BOTTOM,
+    bottom: BIN_BOTTOM - PLAYFIELD_DROP,
     flexDirection: "row",
     justifyContent: "center",
     gap: BIN_GAP,

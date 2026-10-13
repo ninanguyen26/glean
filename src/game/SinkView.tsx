@@ -30,7 +30,8 @@ export const RACK_CAP = 3;
 
 // work area: sink top-left, a row of 3 rack slots below it,
 // prep tray right (3:4)
-export const ZONE = { x: 24, y: 472, w: SW - 48, h: 224 };
+const WORK_AREA_LIFT = 18;
+export const ZONE = { x: 24, y: 472 - WORK_AREA_LIFT, w: SW - 48, h: 224 };
 const Z_GAP = 12;
 const COL_W = (ZONE.w - Z_GAP) / 2;
 const ROW_H = (ZONE.h - Z_GAP) / 2;
@@ -141,10 +142,12 @@ export function SinkBasin({
   items,
   onRinseDone,
   paused,
+  yOffset = 0,
 }: {
   items: SinkItem[];
   onRinseDone: (key: number) => void;
   paused: boolean;
+  yOffset?: number;
 }) {
   const rinsing = items.find((i) => i.status === "rinsing");
   const queued = items.filter((i) => i.status === "queued");
@@ -185,7 +188,12 @@ export function SinkBasin({
     <View
       style={[
         styles.basin,
-        { left: BASIN.x, top: BASIN.y, width: BASIN.w, height: BASIN.h },
+        {
+          left: BASIN.x,
+          top: BASIN.y + yOffset,
+          width: BASIN.w,
+          height: BASIN.h,
+        },
       ]}
     >
       {rinsing ? (
@@ -227,6 +235,7 @@ export function RackSlot({
   onCleanDrop,
   onPrepDrop,
   onPrepHint,
+  yOffset = 0,
 }: {
   item: SinkItem | null;
   index: number;
@@ -240,10 +249,12 @@ export function RackSlot({
   ) => void;
   onPrepDrop?: (key: number, defId: string, x: number, y: number) => void;
   onPrepHint?: () => void;
+  yOffset?: number;
 }) {
   const tx = useSharedValue(0);
   const ty = useSharedValue(0);
   const s = rackSlot(index);
+  const trayHitRect = { ...TRAY_RECT, y: TRAY_RECT.y + yOffset };
 
   // fresh item -> recenter the drag
   useEffect(() => {
@@ -265,7 +276,7 @@ export function RackSlot({
       const needsPrep =
         item.def.complex && item.def.needsRinse && !item.prepped;
       if (needsPrep) {
-        const t = TRAY_RECT;
+        const t = trayHitRect;
         if (
           onPrepDrop &&
           fx >= t.x &&
@@ -298,7 +309,7 @@ export function RackSlot({
     <View
       style={[
         styles.rackSlot,
-        { left: s.x, top: s.y, width: s.s, height: s.s },
+        { left: s.x, top: s.y + yOffset, width: s.s, height: s.s },
       ]}
     >
       {item ? (
@@ -391,5 +402,6 @@ const styles = StyleSheet.create({
     borderStyle: "dashed",
     borderColor: palette.bark,
     backgroundColor: palette.sage,
+    bottom: 10,
   },
 });

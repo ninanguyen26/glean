@@ -21,9 +21,15 @@ import { HOME_BG, SUPERVISOR_AVATAR } from "./sprites";
 
 const STEPS = [
   {
+    title: "You got the job.",
+    body:
+      "Welcome to the materials recovery facility. Around here, every bottle, box, and banana peel has somewhere to go.",
+    button: "Start orientation",
+  },
+  {
     title: "Welcome to the floor.",
     body:
-      "I’m your shift supervisor. This place moves fast, but don’t worry. You’ll learn the line one item at a time.",
+      "I’m your shift supervisor. When the shift starts, the belt starts moving. Keep an eye on each item and don’t worry — you’ll learn the line one piece at a time.",
     button: "I’m ready",
   },
   {

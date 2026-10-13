@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import {
   Image,
   ImageBackground,
@@ -17,20 +17,18 @@ import Animated, {
 } from "react-native-reanimated";
 import { playTap } from "../audio/sounds";
 import { palette } from "../constants/theme";
-import { getActiveSeason, getTierCard } from "./db";
+import { getTierCard } from "./db";
 import { tapFeedback } from "./feel";
 import { BINS, RegionDef } from "./items";
 import { LifetimeHud } from "./LifetimeHud";
+import { SettingsModal } from "./SettingsModal";
 import {
   BIN_SPRITES,
-  ICON_AUTUMN,
   ICON_BACK,
   ICON_PIN,
   ICON_RULEBOOK,
-  ICON_SPRING,
+  ICON_SETTINGS,
   ICON_START,
-  ICON_SUMMER,
-  ICON_WINTER,
   PORTLAND_BG,
 } from "./sprites";
 
@@ -43,8 +41,6 @@ const HOUSE_RULES = [
 
 export function RulesScreen({
   region,
-  day,
-  globalDay,
   onStart,
   onBack,
 }: {
@@ -54,6 +50,8 @@ export function RulesScreen({
   onStart: () => void;
   onBack: () => void;
 }) {
+  const [settingsOpen, setSettingsOpen] = useState(false);
+
   // breathing scale for the start button (matches home play button)
   const scale = useSharedValue(1);
   useEffect(() => {
@@ -70,16 +68,7 @@ export function RulesScreen({
     transform: [{ scale: scale.value }],
   }));
 
-  const activeSeason = getActiveSeason();
   const tierCard = getTierCard(region.tier ?? "tier1");
-  const seasonIcon = activeSeason
-    ? {
-        spring: ICON_SPRING,
-        summer: ICON_SUMMER,
-        fall: ICON_AUTUMN,
-        winter: ICON_WINTER,
-      }[activeSeason.id]
-    : null;
 
   const body = (
     <>
@@ -88,40 +77,37 @@ export function RulesScreen({
           <View style={styles.lifetimeHud}>
             <LifetimeHud />
           </View>
-          <Pressable
-            onPress={() => {
-              tapFeedback();
-              playTap();
-              onBack();
-            }}
-            style={styles.back}
-            hitSlop={10}
-          >
-            <Image
-              source={ICON_BACK}
-              style={styles.backIcon}
-              resizeMode="contain"
-            />
-          </Pressable>
-        </View>
-        <View style={styles.pillRow}>
-          <View style={styles.paperPill}>
-            {seasonIcon && (
+          <View style={styles.topActions}>
+            <Pressable
+              onPress={() => {
+                tapFeedback();
+                playTap();
+                setSettingsOpen(true);
+              }}
+              style={styles.settings}
+              hitSlop={8}
+            >
               <Image
-                source={seasonIcon}
-                style={styles.pillIcon}
+                source={ICON_SETTINGS}
+                style={styles.settingsIcon}
                 resizeMode="contain"
               />
-            )}
-            <Text style={styles.pillText}>Day {globalDay}</Text>
-          </View>
-          <View style={styles.paperPill}>
-            <Image
-              source={ICON_PIN}
-              style={styles.pillIcon}
-              resizeMode="contain"
-            />
-            <Text style={styles.pillText}>{region.name.toUpperCase()}</Text>
+            </Pressable>
+            <Pressable
+              onPress={() => {
+                tapFeedback();
+                playTap();
+                onBack();
+              }}
+              style={styles.back}
+              hitSlop={10}
+            >
+              <Image
+                source={ICON_BACK}
+                style={styles.backIcon}
+                resizeMode="contain"
+              />
+            </Pressable>
           </View>
         </View>
       </View>
@@ -131,6 +117,14 @@ export function RulesScreen({
             style={styles.cardScroll}
             showsVerticalScrollIndicator={false}
           >
+            <View style={styles.cardHeader}>
+              <Image
+                source={ICON_PIN}
+                style={styles.locationIcon}
+                resizeMode="contain"
+              />
+              <Text style={styles.locationName}>{region.name}</Text>
+            </View>
             <View style={styles.sectionPill}>
               <Text style={styles.sectionPillText}>WHAT GOES WHERE</Text>
             </View>
@@ -193,6 +187,7 @@ export function RulesScreen({
           </Animated.View>
         </Pressable>
       </View>
+      {settingsOpen && <SettingsModal onClose={() => setSettingsOpen(false)} />}
     </>
   );
   if (region.id === "portland") {
@@ -235,30 +230,22 @@ const styles = StyleSheet.create({
     height: 36,
     justifyContent: "center",
   },
+  topActions: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  settings: { padding: 4 },
+  settingsIcon: {
+    width: 42,
+    height: 42,
+    shadowColor: "#2E241C",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.4,
+    shadowRadius: 2,
+  },
   back: { padding: 4 },
   backIcon: { width: 42, height: 42 },
-  pillRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-  },
-  paperPill: {
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: palette.oat,
-    borderWidth: 2,
-    borderColor: palette.bark,
-    borderRadius: 14,
-    paddingHorizontal: 12,
-    paddingVertical: 5,
-    height: 32,
-  },
-  pillIcon: { width: 21, height: 21, marginRight: 8 },
-  pillText: {
-    fontFamily: "BalsamiqSans_400Regular",
-    fontSize: 14,
-    color: palette.bark,
-  },
   card: {
     backgroundColor: palette.paper,
     borderRadius: 20,
@@ -272,6 +259,19 @@ const styles = StyleSheet.create({
   },
   cardScroll: {
     flex: 1,
+  },
+  cardHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
+    marginBottom: 10,
+  },
+  locationIcon: { width: 24, height: 24 },
+  locationName: {
+    fontFamily: "BalsamiqSans_700Bold",
+    fontSize: 18,
+    fontWeight: "800",
+    color: palette.bark,
   },
   sectionPill: {
     alignSelf: "flex-start",
