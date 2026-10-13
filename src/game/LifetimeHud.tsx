@@ -87,6 +87,7 @@ const styles = StyleSheet.create({
   },
   icon: { width: 22, height: 22 },
   text: {
+    fontFamily: "BalsamiqSans_700Bold",
     flex: 1,
     marginLeft: 6,
     textAlign: "right",

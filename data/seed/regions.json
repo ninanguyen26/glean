@@ -3,6 +3,7 @@
     {
       "id": "portland",
       "name": "Portland",
+      "tier": "tier1",
       "streams": ["compost", "recycle", "landfill"],
       "workweekDays": 5,
       "blurb": "Keep Portland weird. And sorted.",
@@ -14,29 +15,87 @@
       ]
     },
     {
-      "id": "toronto",
-      "name": "Toronto",
+      "id": "seattle",
+      "name": "Seattle",
+      "tier": "tier1",
       "streams": ["compost", "recycle", "landfill"],
       "workweekDays": 5,
-      "blurb": "Sorry, your garbage is showing.",
+      "blurb": "The Emerald City sorts it right.",
       "unlockStars": 8,
       "rules": [
-        "Paper cups → landfill (plastic lining)",
-        "Milk bags go in the blue bin",
-        "Rinse tins and jars first"
+        "Greasy pizza boxes go to compost",
+        "Black plastic → landfill — the sorters can't see it",
+        "Rinse jars, cans and bottles first"
       ]
     },
     {
-      "id": "uk",
-      "name": "The UK",
+      "id": "austin",
+      "name": "Austin",
+      "tier": "tier1",
       "streams": ["compost", "recycle", "landfill"],
       "workweekDays": 5,
-      "blurb": "Keep calm and sort on.",
+      "blurb": "Keep Austin sorted.",
       "unlockStars": 15,
       "rules": [
-        "Tea bags go to compost",
-        "Crisp packets → landfill",
-        "Rinse tins and glass first"
+        "Greasy pizza boxes go to compost",
+        "Black plastic → landfill — the sorters can't see it",
+        "Rinse jars, cans and bottles first"
+      ]
+    },
+    {
+      "id": "nashville",
+      "name": "Nashville",
+      "tier": "tier2",
+      "streams": ["compost", "recycle", "landfill"],
+      "workweekDays": 5,
+      "blurb": "When in doubt, throw it out.",
+      "unlockStars": 25,
+      "rules": [
+        "Greasy paper goes to landfill — when in doubt, throw it out",
+        "Food scraps and yard waste go to compost",
+        "Rinse jars, cans and bottles first"
+      ]
+    },
+    {
+      "id": "chicago",
+      "name": "Chicago",
+      "tier": "tier2",
+      "streams": ["compost", "recycle", "landfill"],
+      "workweekDays": 5,
+      "blurb": "The Windy City sorts it out.",
+      "unlockStars": 35,
+      "rules": [
+        "Greasy paper goes to landfill — when in doubt, throw it out",
+        "Food scraps and yard waste go to compost",
+        "Rinse jars, cans and bottles first"
+      ]
+    },
+    {
+      "id": "new-york",
+      "name": "New York",
+      "tier": "tier3",
+      "streams": ["compost", "recycle", "landfill"],
+      "workweekDays": 5,
+      "blurb": "If you can sort it here, you can sort it anywhere.",
+      "unlockStars": 50,
+      "rules": [
+        "Greasy pizza boxes go to compost",
+        "Smaller than your palm falls through the sorters — landfill",
+        "Rinse jars, cans and bottles first"
+      ]
+    },
+    {
+      "id": "los-angeles",
+      "name": "Los Angeles",
+      "tier": "tier3",
+      "streams": ["compost", "recycle", "landfill"],
+      "workweekDays": 5,
+      "blurb": "Dream big. Sort small.",
+      "unlockStars": 65,
+      "rules": [
+        "Greasy pizza boxes go to compost",
+        "Smaller than your palm falls through the sorters — landfill",
+        "Rinse jars, cans and bottles first"
       ]
     }
   ]

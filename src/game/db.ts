@@ -1,4 +1,4 @@
-import { GameItem, RegionDef } from './items';
+import { GameItem, RegionDef, TierDef } from './items';
 
 /*
  * Phase 5/6: data pipeline + progression.
@@ -16,7 +16,8 @@ const SEED: GameItem[] = require('../../data/seed/items.json').items.map((it: an
   funFact: FUN_FACTS[it.id] ?? undefined,
 }));
 const REGION_SEED: RegionDef[] = require('../../data/seed/regions.json').regions;
-const DB_VERSION = 20;
+const TIER_SEED: TierDef[] = require('../../data/seed/tiers.json').tiers;
+const DB_VERSION = 31;
 
 export interface SeasonItemSeed {
   id: string;
@@ -52,6 +53,14 @@ export function getRegionDef(id: string): RegionDef {
   return REGION_SEED.find((r) => r.id === id)!;
 }
 
+export function getTierCard(tierId: string): TierDef {
+  return TIER_SEED.find((t) => t.id === tierId) ?? TIER_SEED[0];
+}
+
+export function getAllTiers(): TierDef[] {
+  return TIER_SEED;
+}
+
 function openDb(): any | null {
   try {
     const SQLite = require('expo-sqlite');
@@ -80,7 +89,8 @@ function ensureSeeded(db: any) {
       fun_fact TEXT,
       parts TEXT,
       season TEXT,
-      rarity TEXT
+      rarity TEXT,
+      exclude_tiers TEXT
     );
     CREATE TABLE IF NOT EXISTS shift_results (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -110,6 +120,9 @@ function ensureSeeded(db: any) {
   if (!cols.some((c) => c.name === 'fun_fact')) {
     db.execSync('ALTER TABLE items ADD COLUMN fun_fact TEXT');
   }
+  if (!cols.some((c) => c.name === 'exclude_tiers')) {
+    db.execSync('ALTER TABLE items ADD COLUMN exclude_tiers TEXT');
+  }
   const row: any = db.getFirstSync('SELECT value FROM meta WHERE key = ?', ['items_version']);
   // 'found' used to mean spawned; now it means sorted correctly — wipe once
   const seenFlag: any = db.getFirstSync('SELECT value FROM meta WHERE key = ?', ['seen_version']);
@@ -122,7 +135,7 @@ function ensureSeeded(db: any) {
     db.runSync('DELETE FROM items');
     for (const it of SEED) {
       db.runSync(
-        'INSERT INTO items (id, region, name, bin, color, shape, complex, mechanic, needs_rinse, signature, tricky, teaching, fun_fact, parts, season, rarity) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+        'INSERT INTO items (id, region, name, bin, color, shape, complex, mechanic, needs_rinse, signature, tricky, teaching, fun_fact, parts, season, rarity, exclude_tiers) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
         [
           it.id,
           it.region,
@@ -140,6 +153,7 @@ function ensureSeeded(db: any) {
           it.parts ? JSON.stringify(it.parts) : null,
           it.season ?? null,
           it.rarity ?? null,
+          it.excludeTiers ? JSON.stringify(it.excludeTiers) : null,
         ],
       );
     }
@@ -176,6 +190,7 @@ function rowToItem(r: any): GameItem {
     parts: r.parts ? JSON.parse(r.parts) : undefined,
     season: r.season ?? undefined,
     rarity: r.rarity ?? undefined,
+    excludeTiers: r.exclude_tiers ? JSON.parse(r.exclude_tiers) : undefined,
   };
 }
 
@@ -184,19 +199,31 @@ export async function loadRegionItems(regionId: string): Promise<GameItem[]> {
   return loadUnionItems([regionId]);
 }
 
-/** Universal + several regions' items (used by endless mode). */
+/** Universal + several regions' items (used by endless mode). Items excluded
+ *  from any tier in the pool are filtered out (e.g. universal pizza-box never
+ *  spawns in a pool containing a tier2 city). */
 export async function loadUnionItems(regionIds: string[]): Promise<GameItem[]> {
-  const db = openDb();
-  if (!db) {
-    return SEED.filter((it) => it.region === 'universal' || regionIds.includes(it.region));
-  }
-  ensureSeeded(db);
-  const placeholders = regionIds.map(() => '?').join(',');
-  const rows: any[] = db.getAllSync(
-    `SELECT * FROM items WHERE region = 'universal' OR region IN (${placeholders})`,
-    regionIds,
+  const tiers = new Set(
+    regionIds
+      .map((id) => REGION_SEED.find((r) => r.id === id)?.tier)
+      .filter((t): t is string => !!t),
   );
-  return rows.map(rowToItem);
+  const db = openDb();
+  let items: GameItem[];
+  if (!db) {
+    items = SEED.filter((it) => it.region === 'universal' || regionIds.includes(it.region));
+  } else {
+    ensureSeeded(db);
+    const placeholders = regionIds.map(() => '?').join(',');
+    const rows: any[] = db.getAllSync(
+      `SELECT * FROM items WHERE region = 'universal' OR region IN (${placeholders})`,
+      regionIds,
+    );
+    items = rows.map(rowToItem);
+  }
+  return items.filter(
+    (it) => !it.excludeTiers || !it.excludeTiers.some((t) => tiers.has(t)),
+  );
 }
 
 /* ---------------- settings (persisted in meta, memory fallback) ---------------- */
@@ -377,7 +404,13 @@ export function getActiveSeason(now = new Date()): SeasonDef | null {
 }
 
 export function getAllSeasons(): SeasonDef[] {
-  return SEASON_SEED;
+  return SEASON_SEED.map((s) => ({
+    ...s,
+    items: s.items.map((it: any) => ({
+      ...it,
+      funFact: FUN_FACTS[it.id] ?? undefined,
+    })),
+  }));
 }
 
 /** Universal items (COMMON album tab), from the bundled seed. */
@@ -457,9 +490,9 @@ export function getSortCount(itemId: string): number {
 export const MILESTONE_TIERS = [10, 25, 50];
 
 const MILESTONE_AMOUNTS: Record<string, number[]> = {
-  common: [2, 5, 10],
-  uncommon: [3, 8, 15],
-  rare: [4, 10, 20],
+  common: [2, 5, 8],
+  uncommon: [3, 8, 12],
+  rare: [5, 10, 20],
 };
 
 /** Cash for each tier, by rarity (no-rarity/signature items count as common). */
@@ -629,7 +662,9 @@ export function getSelectedCity(): string {
   if (!db) return memSelectedCity ?? 'portland';
   ensureSeeded(db);
   const row: any = db.getFirstSync('SELECT value FROM meta WHERE key = ?', ['selected_city']);
-  return row ? row.value : 'portland';
+  const id = row ? row.value : 'portland';
+  // removed regions (e.g. toronto/uk) fall back to portland
+  return REGION_SEED.some((r) => r.id === id) ? id : 'portland';
 }
 
 export function setSelectedCity(id: string) {

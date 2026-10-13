@@ -300,6 +300,7 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   rewardBadgeText: {
+    fontFamily: "BalsamiqSans_700Bold",
     color: palette.cream,
     fontWeight: "800",
     fontSize: 14,

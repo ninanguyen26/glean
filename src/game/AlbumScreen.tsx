@@ -7,6 +7,7 @@ import {
   useWindowDimensions,
   View,
 } from "react-native";
+import { playTap } from "../audio/sounds";
 import { palette } from "../constants/theme";
 import {
   getActiveSeason,
@@ -19,11 +20,10 @@ import {
   getUniversalItems,
   SeasonDef,
 } from "./db";
+import { tapFeedback } from "./feel";
+import { ItemDetailModal } from "./ItemDetailModal";
 import { ItemGlyph } from "./ItemGlyph";
 import { GameItem } from "./items";
-import { ItemDetailModal } from "./ItemDetailModal";
-import { tapFeedback } from "./feel";
-import { playTap } from "../audio/sounds";
 
 /* Album as a modal card: dimmed backdrop, cream card, COMMON/SEASONAL/CITIES
    tabs, 3-column tile grid. COMMON = universal items; SEASONAL = seasonal
@@ -137,10 +137,20 @@ export function AlbumScreen({
 
   const activeSeason = getActiveSeason();
   const seasons = getAllSeasons();
+  const RARITY_ORDER: Record<string, number> = { common: 0, uncommon: 1, rare: 2 };
   const seasonItems = (s: SeasonDef): GameItem[] =>
-    s.items.map(
-      (it) => ({ ...it, region: "seasonal", season: s.id }) as GameItem,
-    );
+    s.items
+      .map((it: any) => ({
+        ...it,
+        region: "seasonal",
+        season: s.id,
+        funFact: it.funFact,
+      }) as GameItem)
+      .sort(
+        (a, b) =>
+          (RARITY_ORDER[a.rarity ?? "common"] ?? 0) -
+          (RARITY_ORDER[b.rarity ?? "common"] ?? 0),
+      );
 
   let sections: Section[];
   let chips: { id: string; label: string }[];
@@ -252,7 +262,12 @@ export function AlbumScreen({
       </View>
       <View style={[styles.card, { width: cardWidth }]}>
         {chips.length > 0 && (
-          <View style={styles.chips}>
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            style={styles.chipsScroll}
+            contentContainerStyle={styles.chips}
+          >
             {chips.map((c) => {
               const selected = c.id === chip;
               return (
@@ -275,7 +290,7 @@ export function AlbumScreen({
                 </Pressable>
               );
             })}
-          </View>
+          </ScrollView>
         )}
         <ScrollView
           style={{ height: gridH }}
@@ -404,14 +419,18 @@ const styles = StyleSheet.create({
     letterSpacing: 0.5,
     color: palette.bark,
   },
-  chips: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 8,
+  chipsScroll: {
+    height: 32,
     marginBottom: 10,
   },
+  chips: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    paddingRight: 10,
+  },
   chip: {
-    paddingHorizontal: 12,
+    paddingHorizontal: 10,
     paddingVertical: 6,
     borderRadius: 10,
     borderWidth: 1.5,
@@ -431,6 +450,7 @@ const styles = StyleSheet.create({
     letterSpacing: 0.5,
   },
   count: {
+    fontFamily: "BalsamiqSans_700Bold",
     textAlign: "center",
     fontSize: 12,
     fontWeight: "700",
@@ -438,6 +458,7 @@ const styles = StyleSheet.create({
     marginTop: 10,
   },
   rewardTitle: {
+    fontFamily: "BalsamiqSans_700Bold",
     fontSize: 11,
     fontWeight: "800",
     letterSpacing: 2,
@@ -469,6 +490,7 @@ const styles = StyleSheet.create({
     paddingBottom: 8,
   },
   sectionHeader: {
+    fontFamily: "BalsamiqSans_700Bold",
     width: "100%",
     fontSize: 11,
     fontWeight: "800",
@@ -490,6 +512,7 @@ const styles = StyleSheet.create({
     overflow: "hidden",
   },
   rarity: {
+    fontFamily: "BalsamiqSans_700Bold",
     fontSize: 10,
     fontWeight: "800",
     letterSpacing: 1.5,
@@ -502,8 +525,8 @@ const styles = StyleSheet.create({
     overflow: "hidden", // long names clip instead of pushing the tile
   },
   name: {
+    fontFamily: "BalsamiqSans_400Regular",
     fontSize: 10,
-    fontWeight: "600",
     color: palette.bark,
     textAlign: "center",
     lineHeight: 12,

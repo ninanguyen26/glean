@@ -15,6 +15,7 @@ import {
   addCash,
   claimMilestoneTier,
   getClaimedTiers,
+  getItemById,
   getSortCount,
   MILESTONE_TIERS,
   milestoneAmounts,
@@ -56,16 +57,19 @@ export function ItemDetailModal({
   onClose: () => void;
   onClaimed?: () => void;
 }) {
-  const bin = BINS.find((b) => b.id === item.bin) ?? BINS[2];
+  // Re-fetch to ensure funFact/teaching are present (album passes seed items
+  // that may lack enriched fields).
+  const fullItem = getItemById(item.id) ?? item;
+  const bin = BINS.find((b) => b.id === fullItem.bin) ?? BINS[2];
   const rules: string[] = [];
   if (seen) {
-    const prep = item.mechanic ? PREP_LINES[item.mechanic] : undefined;
+    const prep = fullItem.mechanic ? PREP_LINES[fullItem.mechanic] : undefined;
     if (prep) {
       // complex item: the PREP line is the single instruction
       rules.push(prep);
     } else {
-      if (item.needsRinse) rules.push("Rinse at the sink before sorting.");
-      if (item.teaching) rules.push(item.teaching);
+      if (fullItem.needsRinse) rules.push("Rinse at the sink before sorting.");
+      if (fullItem.teaching) rules.push(fullItem.teaching);
     }
   }
   const sorts = seen ? getSortCount(item.id) : 0;
@@ -153,12 +157,30 @@ export function ItemDetailModal({
           <ItemGlyph def={item} size={96} silhouette={!seen} />
           <View style={styles.headerText}>
             <Text style={styles.name}>{seen ? item.name : "???"}</Text>
-            {seen && (
-              <View style={[styles.binChip, { backgroundColor: bin.color }]}>
-                <Text style={styles.binChipText}>
-                  → {bin.label.toUpperCase()}
-                </Text>
+            {seen && fullItem.parts ? (
+              <View>
+                {fullItem.parts.map((p: any) => {
+                  const partBin = BINS.find((b) => b.id === p.bin) ?? BINS[2];
+                  return (
+                    <View key={p.id} style={styles.partRow}>
+                      <Text style={styles.partLabel}>{p.label}</Text>
+                      <View style={[styles.binChipSmall, { backgroundColor: partBin.color }]}>
+                        <Text style={styles.binChipTextSmall}>
+                          {partBin.label.toUpperCase()}
+                        </Text>
+                      </View>
+                    </View>
+                  );
+                })}
               </View>
+            ) : (
+              seen && (
+                <View style={[styles.binChip, { backgroundColor: bin.color }]}>
+                  <Text style={styles.binChipText}>
+                    → {bin.label.toUpperCase()}
+                  </Text>
+                </View>
+              )
             )}
           </View>
         </View>
@@ -167,7 +189,7 @@ export function ItemDetailModal({
             {rules.map((r) => (
               <RuleRow key={r} text={r} />
             ))}
-            {item.funFact && (
+            {fullItem.funFact && (
               <View style={styles.factBox}>
                 <View style={styles.factHeader}>
                   <Image
@@ -177,7 +199,7 @@ export function ItemDetailModal({
                   />
                   <Text style={styles.factKicker}>FUN FACT</Text>
                 </View>
-                <Text style={styles.factText}>{item.funFact}</Text>
+                <Text style={styles.factText}>{fullItem.funFact}</Text>
               </View>
             )}
             <View style={styles.tracker}>
@@ -277,6 +299,29 @@ const styles = StyleSheet.create({
     letterSpacing: 1.5,
     color: palette.cream,
   },
+  partRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: 4,
+    minWidth: 140,
+  },
+  partLabel: {
+    fontFamily: "BalsamiqSans_400Regular",
+    fontSize: 14,
+    color: palette.bark,
+  },
+  binChipSmall: {
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+  },
+  binChipTextSmall: {
+    fontFamily: "BalsamiqSans_700Bold",
+    fontSize: 11,
+    letterSpacing: 1,
+    color: palette.cream,
+  },
   ruleRow: {
     flexDirection: "row",
     alignItems: "flex-start",
@@ -296,6 +341,7 @@ const styles = StyleSheet.create({
     lineHeight: 18,
   },
   count: {
+    fontFamily: "BalsamiqSans_700Bold",
     fontSize: 12,
     fontWeight: "700",
     color: palette.fog,
@@ -386,6 +432,7 @@ const styles = StyleSheet.create({
     color: palette.bark,
   },
   locked: {
+    fontFamily: "BalsamiqSans_400Regular",
     fontSize: 14,
     color: palette.fog,
     textAlign: "center",

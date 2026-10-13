@@ -352,6 +352,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   qMore: {
+    fontFamily: "BalsamiqSans_700Bold",
     fontSize: 13,
     fontWeight: "800",
     color: palette.river,

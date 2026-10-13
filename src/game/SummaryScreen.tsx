@@ -20,7 +20,6 @@ import Animated, {
 } from "react-native-reanimated";
 import { playCoin, playStarTick } from "../audio/sounds";
 import { palette } from "../constants/theme";
-import { C } from "../spike/effects";
 import { ShiftResult } from "./BeltScreen";
 import { RegionDef } from "./items";
 import { LifetimeHud } from "./LifetimeHud";
@@ -142,11 +141,13 @@ function measureView(ref: { current: any }): Promise<{
 export function SummaryScreen({
   result,
   region,
+  day,
   onContinue,
   onReplay,
 }: {
   result: ShiftResult;
   region: RegionDef | null; // null = endless run
+  day: number;
   onContinue: () => void;
   onReplay: () => void;
 }) {
@@ -281,8 +282,13 @@ export function SummaryScreen({
       <View style={styles.spacerTop} />
       <View style={styles.card}>
         <Text style={styles.kicker}>
-          {region ? `${region.name} — SHIFT COMPLETE` : "ENDLESS — RUN OVER"}
+          {region ? "SHIFT COMPLETE" : "ENDLESS — RUN OVER"}
         </Text>
+        {region ? (
+          <Text style={styles.regionLine}>
+            {region.name} · Day {day}
+          </Text>
+        ) : null}
         {region ? (
           <View ref={starsBoxRef} collapsable={false} style={styles.stars}>
             {[0, 1, 2].map((i) => (
@@ -364,7 +370,7 @@ export function SummaryScreen({
           <Text style={styles.primaryText}>{region ? "Done" : "Done"}</Text>
         </Pressable>
         <Pressable onPress={onReplay} style={styles.secondary}>
-          <MaterialIcons name="replay" size={20} color={C.sub} />
+          <MaterialIcons name="replay" size={20} color={palette.fog} />
           <Text style={styles.secondaryText}>
             {region ? "Run it again" : "New run"}
           </Text>
@@ -391,7 +397,7 @@ export function SummaryScreen({
     );
   }
   return (
-    <View ref={rootRef} style={[styles.root, { backgroundColor: C.bg }]}>
+    <View ref={rootRef} style={[styles.root, { backgroundColor: palette.paper }]}>
       {body}
     </View>
   );
@@ -424,23 +430,33 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 4 },
   },
   kicker: {
+    fontFamily: "BalsamiqSans_700Bold",
     fontSize: 12,
     fontWeight: "700",
     letterSpacing: 2,
-    color: C.sub,
+    color: palette.fog,
     textAlign: "center",
+  },
+  regionLine: {
+    fontFamily: "BalsamiqSans_700Bold",
+    fontSize: 18,
+    fontWeight: "800",
+    color: palette.bark,
+    textAlign: "center",
+    marginTop: 4,
   },
   stars: { flexDirection: "row", marginVertical: 12, gap: 8 },
   starIcon: { width: 44, height: 44 },
-  score: { fontSize: 64, fontWeight: "900", color: C.ink, marginVertical: 8 },
+  score: { fontFamily: "BalsamiqSans_700Bold", fontSize: 64, fontWeight: "900", color: palette.bark, marginVertical: 8 },
   newBest: {
+    fontFamily: "BalsamiqSans_700Bold",
     fontSize: 15,
     fontWeight: "800",
-    color: C.gold,
+    color: palette.gold,
     letterSpacing: 2,
     marginBottom: 8,
   },
-  line: { fontSize: 16, color: C.ink, marginTop: 4, fontWeight: "600" },
+  line: { fontFamily: "BalsamiqSans_400Regular", fontSize: 16, color: palette.bark, marginTop: 4 },
   statRow: {
     flexDirection: "row",
     justifyContent: "space-between",
@@ -448,10 +464,10 @@ const styles = StyleSheet.create({
     width: "100%",
     marginTop: 4,
   },
-  statLabel: { fontSize: 16, color: C.ink, fontWeight: "600" },
+  statLabel: { fontFamily: "BalsamiqSans_400Regular", fontSize: 16, color: palette.bark },
   statLabelRow: { flexDirection: "row", alignItems: "center", gap: 8 },
   statIcon: { width: 20, height: 20 },
-  statValue: { fontSize: 16, color: C.ink, fontWeight: "800" },
+  statValue: { fontFamily: "BalsamiqSans_700Bold", fontSize: 16, color: palette.bark, fontWeight: "800" },
   divider: {
     borderBottomWidth: 1,
     borderStyle: "dashed",
@@ -461,28 +477,29 @@ const styles = StyleSheet.create({
   },
   lessons: {
     marginTop: 16,
-    backgroundColor: "#FAF3E8",
+    backgroundColor: palette.paper,
     borderRadius: 12,
     padding: 14,
     width: "100%",
   },
   lessonsTitle: {
+    fontFamily: "BalsamiqSans_700Bold",
     fontSize: 11,
     fontWeight: "800",
     letterSpacing: 2,
-    color: C.sub,
+    color: palette.fog,
     marginBottom: 6,
   },
   lesson: {
     fontSize: 13,
-    color: C.ink,
+    color: palette.bark,
     marginTop: 4,
     lineHeight: 19,
     fontWeight: "600",
   },
   primary: {
     marginTop: 20,
-    backgroundColor: C.ink,
+    backgroundColor: palette.bark,
     borderRadius: 12,
     paddingHorizontal: 26,
     paddingVertical: 13,
@@ -492,7 +509,7 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     gap: 10,
   },
-  primaryText: { color: "#fff", fontWeight: "700", fontSize: 15 },
+  primaryText: { fontFamily: "BalsamiqSans_700Bold", color: "#fff", fontWeight: "700", fontSize: 15 },
   secondary: {
     marginTop: 2,
     paddingVertical: 10,
@@ -501,5 +518,5 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     gap: 8,
   },
-  secondaryText: { color: C.sub, fontWeight: "700", fontSize: 14 },
+  secondaryText: { fontFamily: "BalsamiqSans_700Bold", color: palette.fog, fontWeight: "700", fontSize: 14 },
 });

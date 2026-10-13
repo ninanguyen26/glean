@@ -1,5 +1,6 @@
 import { useEffect } from "react";
 import { Dimensions } from "react-native";
+import { palette } from "../constants/theme";
 import Animated, {
   Easing,
   useAnimatedStyle,
@@ -9,21 +10,6 @@ import Animated, {
 } from "react-native-reanimated";
 
 export const { width: SW, height: SH } = Dimensions.get("window");
-
-export const C = {
-  bg: "#FAF3E8",
-  ink: "#4A3F35",
-  sub: "#8A7B68",
-  belt: "#4A4239",
-  bottle: "#CFE8F2",
-  bottleInk: "#6FA3B8",
-  cap: "#E8735A",
-  wrapper: "#9DBE8C",
-  pet: "#7FB3D5",
-  plastic: "#E8735A",
-  other: "#A8A29E",
-  gold: "#E8A13D",
-};
 
 // Modal bottle geometry (modal content = full-screen coords)
 export const BW = 150;
@@ -110,7 +96,7 @@ function Dot({ x, y, i }: { x: number; y: number; i: number }) {
           width: 10,
           height: 10,
           borderRadius: 5,
-          backgroundColor: C.gold,
+          backgroundColor: palette.gold,
         },
         st,
       ]}

@@ -31,7 +31,8 @@ export const Spacing = {
   six: 24,
 };
 
-/* Glean palette — extracted from the icon set (album/map/play/start) */
+/* Glean palette — extracted from the icon set (album/map/play/start).
+   Every color in the app comes from here; spike/effects holds geometry only. */
 export const palette = {
   outline: '#6E1E1E',    // dark red-brown outline
   sage: '#93B192',       // play/start button green
@@ -52,6 +53,13 @@ export const palette = {
   scrim: 'rgba(46,36,28,0.6)',   // modal backdrop dim
   faint: 'rgba(74,63,53,0.28)',  // soft outline
   river: '#5B9BD5',      // uncommon rarity
+  belt: '#4A4239',       // conveyor belt
+  bottle: '#CFE8F2',     // bottle plastic blue
+  bottleInk: '#6FA3B8',  // bottle shading
+  cap: '#E8735A',        // bottle cap coral
+  pet: '#7FB3D5',        // PET stream blue
+  plastic: '#E8735A',    // hard plastic coral
+  other: '#A8A29E',      // "other" stream gray
 };
 
 export const fontSize = {

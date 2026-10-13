@@ -1,0 +1,31 @@
+{
+  "tiers": [
+    {
+      "id": "tier1",
+      "name": "Sort it right",
+      "streams": {
+        "compost": "food scraps, food-soiled paper (napkins, pizza boxes, coffee filters), yard waste",
+        "recycle": "paper, cardboard, cartons, glass bottles and jars, metal cans, plastic containers, empty, clean, dry",
+        "landfill": "plastic bags & film, foam, tanglers, tiny items, everything else"
+      }
+    },
+    {
+      "id": "tier2",
+      "name": "When in doubt, throw it out",
+      "streams": {
+        "compost": "food scraps, yard waste — nothing soiled",
+        "recycle": "clean paper, cardboard, cartons, glass, metal cans, plastic bottles & jugs — empty, clean, dry",
+        "landfill": "greasy or food-soiled paper (pizza boxes, napkins), plastic bags & film, foam, tanglers, tiny items, everything else"
+      }
+    },
+    {
+      "id": "tier3",
+      "name": "Nothing is what it seems",
+      "streams": {
+        "compost": "food scraps, food-soiled paper, yard waste",
+        "recycle": "paper, cardboard, cartons, glass, metal, plastics — empty, clean, dry; smaller than your palm falls through the sorters, so it goes to landfill",
+        "landfill": "plastic bags & film, foam, tanglers, tiny items, everything else"
+      }
+    }
+  ]
+}

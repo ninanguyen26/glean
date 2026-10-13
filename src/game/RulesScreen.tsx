@@ -17,8 +17,7 @@ import Animated, {
 } from "react-native-reanimated";
 import { playTap } from "../audio/sounds";
 import { palette } from "../constants/theme";
-import { C } from "../spike/effects";
-import { getActiveSeason } from "./db";
+import { getActiveSeason, getTierCard } from "./db";
 import { tapFeedback } from "./feel";
 import { BINS, RegionDef } from "./items";
 import { LifetimeHud } from "./LifetimeHud";
@@ -36,13 +35,6 @@ import {
 } from "./sprites";
 
 /* Phase 6: pre-shift rules card — streams, house rules, then start. */
-
-const STREAM_ITEMS: Record<string, string> = {
-  compost: "food scraps, soiled paper, yard waste",
-  recycle: "paper, cardboard, glass & metal",
-  landfill:
-    "plastic of any color (black too — the sorters can't see it), stringy stuff (it jams the line), everything else",
-};
 
 const HOUSE_RULES = [
   "Give dirty containers a rinse in the SINK",
@@ -79,6 +71,7 @@ export function RulesScreen({
   }));
 
   const activeSeason = getActiveSeason();
+  const tierCard = getTierCard(region.tier ?? "tier1");
   const seasonIcon = activeSeason
     ? {
         spring: ICON_SPRING,
@@ -155,7 +148,9 @@ export function RulesScreen({
                     </View>
                     <View style={styles.streamText}>
                       <Text style={styles.streamName}>{b.label}</Text>
-                      <Text style={styles.streamItems}>{STREAM_ITEMS[s]}</Text>
+                      <Text style={styles.streamItems}>
+                        {tierCard.streams[s]}
+                      </Text>
                     </View>
                   </View>
                   {i < region.streams.length - 1 ? (
@@ -211,7 +206,11 @@ export function RulesScreen({
       </ImageBackground>
     );
   }
-  return <View style={[styles.root, { backgroundColor: C.bg }]}>{body}</View>;
+  return (
+    <View style={[styles.root, { backgroundColor: palette.paper }]}>
+      {body}
+    </View>
+  );
 }
 
 const styles = StyleSheet.create({
@@ -256,8 +255,8 @@ const styles = StyleSheet.create({
   },
   pillIcon: { width: 21, height: 21, marginRight: 8 },
   pillText: {
+    fontFamily: "BalsamiqSans_400Regular",
     fontSize: 14,
-    fontWeight: "600",
     color: palette.bark,
   },
   card: {
@@ -283,6 +282,7 @@ const styles = StyleSheet.create({
     marginBottom: 6,
   },
   sectionPillText: {
+    fontFamily: "BalsamiqSans_700Bold",
     color: palette.bark,
     fontSize: 11,
     fontWeight: "800",
@@ -308,13 +308,19 @@ const styles = StyleSheet.create({
   },
   binImage: { width: 65, height: 65 },
   streamText: { flex: 1 },
-  streamName: { fontSize: 16, fontWeight: "800", color: C.ink },
+  streamName: {
+    fontFamily: "BalsamiqSans_700Bold",
+    fontSize: 16,
+    fontWeight: "800",
+    color: palette.bark,
+  },
   streamItems: {
-    fontSize: 12,
-    color: C.ink,
+    fontSize: 11,
+    color: palette.bark,
     fontWeight: "500",
     marginTop: 4,
-    lineHeight: 18,
+    marginRight: 20,
+    lineHeight: 16,
   },
   divider: {
     borderBottomWidth: 1,
@@ -330,13 +336,18 @@ const styles = StyleSheet.create({
     marginBottom: 6,
   },
   rulebookIcon: { width: 40, height: 40 },
-  rulesTitle: { fontSize: 17, fontWeight: "800", color: C.ink },
+  rulesTitle: {
+    fontFamily: "BalsamiqSans_700Bold",
+    fontSize: 17,
+    fontWeight: "800",
+    color: palette.bark,
+  },
   rule: {
-    fontSize: 12,
-    color: C.ink,
+    fontSize: 11,
+    color: palette.bark,
     marginTop: 8,
     fontWeight: "500",
-    lineHeight: 18,
+    lineHeight: 16,
   },
   start: {
     alignItems: "center",

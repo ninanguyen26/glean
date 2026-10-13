@@ -39,6 +39,7 @@ export interface GameItem {
   parts?: PartDef[]; // separable parts for complex items
   season?: string; // seasonal event id, e.g. 'winter'
   rarity?: 'common' | 'uncommon' | 'rare';
+  excludeTiers?: string[]; // tiers where this item never spawns (e.g. ['tier2'])
 }
 
 /** Legacy alias used across game code. */
@@ -47,9 +48,16 @@ export type ItemDef = GameItem;
 export interface RegionDef {
   id: string;
   name: string;
+  tier: string;
   streams: BinId[];
   workweekDays: number;
   blurb: string;
   unlockStars: number;
   rules: string[];
+}
+
+export interface TierDef {
+  id: string;
+  name: string;
+  streams: Record<string, string>;
 }

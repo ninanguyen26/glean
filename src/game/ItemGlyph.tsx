@@ -1,6 +1,5 @@
 import React from 'react';
 import { View, Image } from 'react-native';
-import { C } from '../spike/effects';
 import { palette } from '../constants/theme';
 import { ItemDef } from './items';
 import { ITEM_SPRITES } from './sprites';
@@ -26,6 +25,7 @@ export function ItemGlyph({
   if (src) {
     return (
       <Image
+        key={silhouette ? "sil" : "full"}
         source={src}
         style={{
           width: size,
@@ -49,7 +49,7 @@ export function ItemGlyph({
   if (def.complex)
     return (
       <View style={[base, { borderRadius: 12, alignItems: 'center', justifyContent: 'flex-end', paddingBottom: 6 }]}>
-        <View style={{ width: size * 0.34, height: size * 0.2, borderRadius: 5, backgroundColor: C.cap }} />
+        <View style={{ width: size * 0.34, height: size * 0.2, borderRadius: 5, backgroundColor: palette.cap }} />
       </View>
     );
   return <View style={[base, { borderRadius: 12 }]} />;

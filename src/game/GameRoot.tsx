@@ -8,7 +8,7 @@ import {
 } from '../audio/sounds';
 import { getSetting } from './db';
 import { setHapticsMuted } from './feel';
-import { C } from '../spike/effects';
+import { palette } from '../constants/theme';
 import { HomeScreen } from './HomeScreen';
 import { RulesScreen } from './RulesScreen';
 import { SummaryScreen } from './SummaryScreen';
@@ -202,6 +202,7 @@ export function GameRoot() {
         <SummaryScreen
           result={screen.result}
           region={region}
+          day={screen.day}
           onContinue={() => {
             refresh();
             setScreen({ name: 'home' });
@@ -232,6 +233,6 @@ export function GameRoot() {
 
 const styles = StyleSheet.create({
   root: { flex: 1 },
-  loading: { flex: 1, backgroundColor: C.bg, justifyContent: 'center', alignItems: 'center' },
-  loadingText: { fontSize: 17, fontWeight: '700', color: C.sub },
+  loading: { flex: 1, backgroundColor: palette.paper, justifyContent: 'center', alignItems: 'center' },
+  loadingText: { fontFamily: 'BalsamiqSans_700Bold', fontSize: 17, fontWeight: '700', color: palette.fog },
 });

@@ -12,12 +12,18 @@
         {"id":"daffodil-stems","name":"Daffodil stems","bin":"compost","color":"#7A9A5B","shape":"rect","rarity":"common"},
         {"id":"seed-packet","name":"Seed packet","bin":"recycle","color":"#C9A06B","shape":"rect","rarity":"common"},
         {"id":"plant-tag","name":"Plant tag","bin":"landfill","color":"#E8E4DA","shape":"rect","rarity":"common"},
-        {"id":"soil-bag","name":"Soil bag","bin":"landfill","color":"#5A4A3A","shape":"rect","rarity":"common"},
+        {"id":"grass-clippings","name":"Grass clippings","bin":"compost","color":"#7A9A5B","shape":"circle","rarity":"common"},
+        {"id":"potting-soil","name":"Soil bag","bin":"landfill","color":"#5A4A3A","shape":"rect","rarity":"common","teaching":"Plastic bag — landfill."},
+        {"id":"dead-seedlings","name":"Dead seedlings","bin":"compost","color":"#7A9A5B","shape":"circle","rarity":"common"},
+        {"id":"veggie-scraps","name":"Veggie scraps","bin":"compost","color":"#7A9A5B","shape":"circle","rarity":"common"},
+        {"id":"nursery-pot","name":"Nursery pot","bin":"recycle","color":"#3E5A3E","shape":"circle","rarity":"common","needsRinse":true},
         {"id":"broken-trowel","name":"Broken trowel","bin":"landfill","color":"#9AA3A8","shape":"rect","rarity":"uncommon"},
-        {"id":"fertilizer-bag","name":"Fertilizer bag","bin":"landfill","color":"#7A5230","shape":"rect","rarity":"uncommon","teaching":"Multi-layer plastic — landfill."},
-        {"id":"spring-flyer","name":"Spring flyer","bin":"recycle","color":"#E8E4DA","shape":"rect","rarity":"uncommon"},
-        {"id":"easter-grass","name":"Easter grass","bin":"landfill","color":"#A8B86B","shape":"diamond","rarity":"rare","teaching":"Tanglers jam the line."},
-        {"id":"cracked-pot","name":"Terracotta pot","bin":"landfill","color":"#A85F4B","shape":"circle","rarity":"rare","teaching":"Terracotta isn't recyclable."}
+        {"id":"floral-foam","name":"Floral foam","bin":"landfill","color":"#4A7A5B","shape":"rect","rarity":"uncommon","teaching":"Breaks into microplastics — landfill."},
+        {"id":"chipped-terracotta","name":"Cracked terracotta","bin":"landfill","color":"#A85F4B","shape":"circle","rarity":"uncommon","teaching":"Terracotta isn't recyclable."},
+        {"id":"plastic-eggs","name":"Plastic eggs","bin":"landfill","color":"#E8913D","shape":"circle","rarity":"uncommon"},
+        {"id":"bubble-bottle","name":"Bubble bottle","bin":"recycle","color":"#7FB3D5","shape":"rect","rarity":"uncommon","needsRinse":true},
+        {"id":"garden-hose","name":"Garden hose","bin":"landfill","color":"#3E7A3E","shape":"rect","rarity":"rare"},
+        {"id":"broken-kite","name":"Broken kite","bin":"landfill","color":"#D95F4B","shape":"diamond","rarity":"rare"}
       ]
     },
     {
@@ -31,13 +37,19 @@
       "items": [
         {"id":"popsicle-stick","name":"Popsicle stick","bin":"compost","color":"#C9A06B","shape":"rect","rarity":"common"},
         {"id":"sunscreen-bottle","name":"Sunscreen bottle","bin":"recycle","color":"#E8C53D","shape":"rect","rarity":"common"},
-        {"id":"ice-cream-tub","name":"Gelato tub","bin":"recycle","color":"#EDEAE2","shape":"circle","rarity":"common"},
-        {"id":"paper-plate","name":"Paper plate","bin":"compost","color":"#F0E8D8","shape":"circle","rarity":"common","teaching":"Greasy — compost, don't recycle."},
+        {"id":"watermelon-rind","name":"Watermelon rind","bin":"compost","color":"#3E7A3E","shape":"circle","rarity":"common"},
+        {"id":"corn-cob","name":"Corn cob","bin":"compost","color":"#E8C53D","shape":"rect","rarity":"common"},
+        {"id":"peach-pit","name":"Peach pit","bin":"compost","color":"#A85F4B","shape":"circle","rarity":"common"},
+        {"id":"broken-flip-flop","name":"Broken flip-flop","bin":"landfill","color":"#5A9BD5","shape":"rect","rarity":"common"},
         {"id":"solo-cup","name":"Solo cup","bin":"landfill","color":"#D95F4B","shape":"circle","rarity":"uncommon","teaching":"Cups are plastic-lined — landfill."},
-        {"id":"glow-stick","name":"Glow stick","bin":"landfill","color":"#A8B86B","shape":"rect","rarity":"uncommon"},
-        {"id":"wax-paper","name":"Wax paper","bin":"landfill","color":"#EDEAE2","shape":"rect","rarity":"uncommon"},
+        {"id":"popped-beach-ball","name":"Popped beach ball","bin":"landfill","color":"#D95F4B","shape":"circle","rarity":"uncommon"},
+        {"id":"crab-shell","name":"Crab shell","bin":"compost","color":"#C0392B","shape":"circle","rarity":"uncommon"},
+        {"id":"bug-spray-can","name":"Bug spray can","bin":"landfill","color":"#7FB3D5","shape":"rect","rarity":"uncommon","teaching":"Aerosol — landfill."},
+        {"id":"snow-cone-cup","name":"Snow cone cup","bin":"landfill","color":"#EDEAE2","shape":"circle","rarity":"uncommon","teaching":"Waxy lining — landfill."},
+        {"id":"coconut-shell","name":"Coconut shell","bin":"compost","color":"#7A5230","shape":"circle","rarity":"uncommon"},
         {"id":"pool-noodle","name":"Pool noodle","bin":"landfill","color":"#7FB3D5","shape":"circle","rarity":"rare"},
-        {"id":"candle-tin","name":"Candle tin","bin":"landfill","color":"#E8A13D","shape":"circle","rarity":"rare"}
+        {"id":"cracked-frisbee","name":"Cracked frisbee","bin":"landfill","color":"#E8913D","shape":"circle","rarity":"rare"},
+        {"id":"broken-straw-hat","name":"Broken straw hat","bin":"compost","color":"#C9A06B","shape":"circle","rarity":"rare"}
       ]
     },
     {
@@ -81,9 +93,15 @@
         {"id":"wrap-tube","name":"Wrap tube","bin":"recycle","color":"#C9A06B","shape":"rect","rarity":"common"},
         {"id":"gift-wrap","name":"Gift wrap","bin":"landfill","color":"#D95F4B","shape":"rect","rarity":"uncommon","teaching":"Foil gift wrap can't be recycled."},
         {"id":"ribbon","name":"Ribbon","bin":"landfill","color":"#E8A13D","shape":"diamond","rarity":"uncommon"},
-        {"id":"eggnog-carton","name":"Eggnog carton","bin":"recycle","color":"#EDEAE2","shape":"rect","rarity":"uncommon"},
+        {"id":"orange-peels","name":"Orange peels","bin":"compost","color":"#E8913D","shape":"circle","rarity":"common"},
+        {"id":"dead-poinsettia","name":"Dead poinsettia","bin":"compost","color":"#A03030","shape":"circle","rarity":"common"},
+        {"id":"fruitcake","name":"Fruitcake","bin":"compost","color":"#7A5230","shape":"rect","rarity":"common"},
+        {"id":"cookie-tin","name":"Cookie tin","bin":"recycle","color":"#B0B0B0","shape":"circle","rarity":"uncommon"},
+        {"id":"advent-calendar","name":"Advent calendar","bin":"landfill","color":"#C0392B","shape":"rect","rarity":"uncommon","teaching":"Mixed materials — landfill."},
         {"id":"broken-ornament","name":"Broken ornament","bin":"landfill","color":"#D95F4B","shape":"diamond","rarity":"rare"},
-        {"id":"string-lights","name":"String lights","bin":"landfill","color":"#E8C53D","shape":"circle","rarity":"rare","teaching":"Tanglers jam the line."}
+        {"id":"string-lights","name":"String lights","bin":"landfill","color":"#E8C53D","shape":"circle","rarity":"rare","teaching":"Tanglers jam the line."},
+        {"id":"tinsel","name":"Tinsel","bin":"landfill","color":"#C0C0C0","shape":"diamond","rarity":"rare","teaching":"Tanglers jam the line."},
+        {"id":"ice-scraper","name":"Ice scraper","bin":"landfill","color":"#5A9BD5","shape":"rect","rarity":"rare"}
       ]
     }
   ]

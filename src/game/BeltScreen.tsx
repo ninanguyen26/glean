@@ -31,7 +31,6 @@ import {
   binX,
   binY,
   Burst,
-  C,
   SW,
 } from "../spike/effects";
 import { BinRect } from "./binHit";
@@ -40,6 +39,7 @@ import {
   addCash,
   drawSeasonal,
   getActiveSeason,
+  getAllSeasons,
   getCash,
   getTotalStars,
   incrementSortCount,
@@ -116,8 +116,8 @@ const SHIFT_ITEMS = 20;
 const CHEV_GAP = 44;
 const ENDLESS_LIVES = 3;
 
-// DEBUG: spawn only foil (testing the tap modal)
-const DEBUG_FOIL_ONLY = false;
+// DEBUG: spawn only seasonal items
+const DEBUG_SEASONAL_ONLY = true;
 
 // work area: sink top-left, a row of 4 rack slots below it, prep tray
 // right (3:4); the tray doubles as the bottle prep drop zone
@@ -545,6 +545,7 @@ export function BeltScreen({
   const endedRef = useRef(false);
   const endTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const seasonRef = useRef<{ def: SeasonDef; items: GameItem[] } | null>(null);
+  const [allSeasonal, setAllSeasonal] = useState<GameItem[]>([]);
   const sawRareRef = useRef(false);
   const onShiftEndRef = useRef(onShiftEnd);
   onShiftEndRef.current = onShiftEnd;
@@ -617,6 +618,11 @@ export function BeltScreen({
     } else {
       seasonRef.current = null;
     }
+    if (DEBUG_SEASONAL_ONLY) {
+      Promise.all(getAllSeasons().map((s) => loadSeasonalItems(s.id))).then(
+        (all) => setAllSeasonal(all.flat()),
+      );
+    }
   }, [regionKey]);
 
   // random draw from the spawnable pool (complex items only once their
@@ -648,9 +654,10 @@ export function BeltScreen({
 
   const buildQueue = (p: GameItem[], n: number): GameItem[] => {
     const q: GameItem[] = [];
-    const foil = p.find((it) => it.id === "aluminum-foil");
-    if (DEBUG_FOIL_ONLY && foil) {
-      for (let i = 0; i < n; i++) q.push(foil);
+    if (DEBUG_SEASONAL_ONLY && allSeasonal.length > 0) {
+      for (let i = 0; i < n; i++) {
+        q.push(allSeasonal[Math.floor(Math.random() * allSeasonal.length)]);
+      }
       return q;
     }
     const bottle = p.find((it) => it.id === "bottle");
@@ -668,7 +675,7 @@ export function BeltScreen({
     streakMilestonesRef.current = new Set();
     queueRef.current = buildQueue(pool, SHIFT_ITEMS);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [runId, pool, DEBUG_FOIL_ONLY]);
+  }, [runId, pool, allSeasonal, DEBUG_SEASONAL_ONLY]);
 
   // spawner (dead while the belt is paused for learning; refills in endless)
   useEffect(() => {
@@ -706,22 +713,22 @@ export function BeltScreen({
       // pre-shift totals for the summary reward flight (db not yet updated)
       const cashBefore = getCash();
       const starsBefore = getTotalStars();
-      // cash: $20 base (50%+ accuracy only) + $2/correct + streak bonuses
-      const baseCash = accuracy >= 0.5 ? 20 : 0;
-      const sortCash = correct * 2;
+      // cash: $2 base (50%+ accuracy only) + $1/correct + streak bonuses
+      const baseCash = accuracy >= 0.5 ? 2 : 0;
+      const sortCash = correct * 1;
       const milestones = streakMilestonesRef.current;
       let streakCash = 0;
       if (milestones.has(5)) {
-        streakCash += 5;
+        streakCash += 2;
       }
       if (milestones.has(10)) {
-        streakCash += 8;
+        streakCash += 4;
       }
       if (milestones.has(15)) {
-        streakCash += 10;
+        streakCash += 6;
       }
       if (milestones.has(20)) {
-        streakCash += 15;
+        streakCash += 10;
       }
       const totalCash = baseCash + sortCash + streakCash;
       const newCash = addCash(totalCash);
@@ -774,7 +781,8 @@ export function BeltScreen({
 
   const findDef = (defId: string) =>
     poolRef.current.find((d) => d.id === defId) ??
-    seasonRef.current?.items.find((d) => d.id === defId);
+    seasonRef.current?.items.find((d) => d.id === defId) ??
+    allSeasonal.find((d) => d.id === defId);
 
   // mistake-as-lesson: first miss per item per shift teaches, repeats just sting
   const wrongSort = (def: GameItem) => {
@@ -1347,7 +1355,7 @@ const styles = StyleSheet.create({
   },
   winterRoot: { backgroundColor: "#EDF1F6" },
   loadingWrap: { justifyContent: "center", alignItems: "center" },
-  loading: { fontSize: 17, fontWeight: "700", color: C.sub },
+  loading: { fontFamily: "BalsamiqSans_700Bold", fontSize: 17, fontWeight: "700", color: palette.fog },
   topRow: {
     flexDirection: "row",
     justifyContent: "space-between",
@@ -1382,8 +1390,8 @@ const styles = StyleSheet.create({
   },
   seasonIcon: { width: 21, height: 21, marginRight: 8 },
   shiftTitle: {
+    fontFamily: "BalsamiqSans_400Regular",
     fontSize: 14,
-    fontWeight: "600",
     color: palette.bark,
   },
   statPill: {
@@ -1400,12 +1408,13 @@ const styles = StyleSheet.create({
     width: 80,
   },
   statText: {
+    fontFamily: "BalsamiqSans_700Bold",
     fontSize: 13,
     fontWeight: "700",
     color: palette.bark,
   },
   statLabel: {
-    fontWeight: "600",
+    fontFamily: "BalsamiqSans_400Regular",
   },
   streakIcon: { width: 20, height: 20, marginRight: 6 },
   pauseOverlay: {
@@ -1454,9 +1463,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
   },
   hint: {
+    fontFamily: "BalsamiqSans_400Regular",
     textAlign: "center",
     fontSize: 14,
-    fontWeight: "600",
     color: "#FFF",
   },
   belt: {
@@ -1504,10 +1513,11 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 0 },
   },
   itemLabel: {
+    fontFamily: "BalsamiqSans_700Bold",
     marginTop: 4,
     fontSize: 10,
     fontWeight: "700",
-    color: C.ink,
+    color: palette.bark,
     backgroundColor: "rgba(250,243,232,0.85)",
     paddingHorizontal: 6,
     paddingVertical: 2,
@@ -1530,9 +1540,10 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   binLabel: {
+    fontFamily: "BalsamiqSans_700Bold",
     position: "absolute",
     bottom: 10,
-    color: "#4A3F35",
+    color: palette.bark,
     fontWeight: "800",
     fontSize: 15,
   },

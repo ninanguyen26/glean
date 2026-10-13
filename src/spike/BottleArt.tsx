@@ -1,15 +1,16 @@
 import React from 'react';
 import { Canvas, RoundedRect } from '@shopify/react-native-skia';
-import { C, BW, BH } from './effects';
+import { palette } from '../constants/theme';
+import { BW, BH } from './effects';
 
 /* Small static bottle for the belt. Layered shapes, no animation. */
 export function BeltBottle() {
   return (
     <Canvas style={{ width: 90, height: 130 }}>
-      <RoundedRect x={18} y={30} width={54} height={88} r={14} color={C.bottle} />
-      <RoundedRect x={18} y={30} width={54} height={88} r={14} color={C.bottleInk} style="stroke" strokeWidth={4} />
-      <RoundedRect x={30} y={12} width={30} height={20} r={7} color={C.cap} />
-      <RoundedRect x={22} y={58} width={46} height={30} r={6} color={C.wrapper} />
+      <RoundedRect x={18} y={30} width={54} height={88} r={14} color={palette.bottle} />
+      <RoundedRect x={18} y={30} width={54} height={88} r={14} color={palette.bottleInk} style="stroke" strokeWidth={4} />
+      <RoundedRect x={30} y={12} width={30} height={20} r={7} color={palette.cap} />
+      <RoundedRect x={22} y={58} width={46} height={30} r={6} color={palette.leaf} />
     </Canvas>
   );
 }

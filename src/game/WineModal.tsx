@@ -11,6 +11,7 @@ import Animated, {
   withTiming,
 } from "react-native-reanimated";
 import { playCorrect, playWrong } from "../audio/sounds";
+import { palette } from "../constants/theme";
 import {
   BIN_BOTTOM,
   BIN_GAP,
@@ -21,7 +22,6 @@ import {
   Burst,
   BX,
   BY,
-  C,
   Pulse,
   SH,
   SW,
@@ -382,7 +382,7 @@ export function WineModal({
           <View
             style={{ position: "absolute", left: SW / 2 - 38, top: BY + 20 }}
           >
-            <Pulse size={76} color={C.gold} />
+            <Pulse size={76} color={palette.gold} />
           </View>
         )}
         <Animated.Image
@@ -452,6 +452,7 @@ const styles = StyleSheet.create({
   },
   modalContent: { position: "absolute", left: 0, right: 0, top: 0, bottom: 0 },
   stepKicker: {
+    fontFamily: "BalsamiqSans_700Bold",
     textAlign: "center",
     marginTop: 155,
     fontSize: 12,
@@ -478,6 +479,7 @@ const styles = StyleSheet.create({
     backgroundColor: "#E05A4B",
   },
   tickerLabel: {
+    fontFamily: "BalsamiqSans_700Bold",
     fontSize: 10,
     fontWeight: "800",
     letterSpacing: 2,
@@ -487,7 +489,7 @@ const styles = StyleSheet.create({
   tickerItem: { flexDirection: "row", alignItems: "center", gap: 6, flex: 1 },
   tickerDot: { width: 24, height: 24 },
   tickerDiamond: { transform: [{ rotate: "45deg" }] },
-  tickerName: { fontSize: 11, fontWeight: "600", color: "#fff", flexShrink: 1 },
+  tickerName: { fontFamily: "BalsamiqSans_400Regular", fontSize: 11, color: "#fff", flexShrink: 1 },
   pausedPill: {
     alignSelf: "center",
     marginTop: 15,
@@ -496,8 +498,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 7,
   },
-  pausedText: { fontSize: 13, fontWeight: "700", color: C.ink },
+  pausedText: { fontFamily: "BalsamiqSans_700Bold", fontSize: 13, fontWeight: "700", color: palette.bark },
   instruction: {
+    fontFamily: "BalsamiqSans_700Bold",
     textAlign: "center",
     marginTop: 10,
     fontSize: 18,
@@ -506,10 +509,10 @@ const styles = StyleSheet.create({
     paddingHorizontal: 40,
   },
   hint: {
+    fontFamily: "BalsamiqSans_400Regular",
     textAlign: "center",
     marginTop: 8,
     fontSize: 15,
-    fontWeight: "600",
     color: "#FFD9A8",
     paddingHorizontal: 40,
   },

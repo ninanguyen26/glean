@@ -12,8 +12,9 @@ import Animated, {
   Easing,
 } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
+import { palette } from '../constants/theme';
 import {
-  C, SW, SH, BX, BY, BW, BH,
+  SW, SH, BX, BY, BW, BH,
   BIN_W, BIN_H, BIN_GAP, BIN_BOTTOM, binX, binY,
   Pulse, Burst,
 } from './effects';
@@ -25,9 +26,9 @@ const PEEL_DIST = 150; // drag px for a full peel
 type ChipId = 'cap' | 'wrapper' | 'body';
 
 const BINS = [
-  { id: 0, label: 'PET', color: C.pet },
-  { id: 1, label: 'Plastic', color: C.plastic },
-  { id: 2, label: 'Other', color: C.other },
+  { id: 0, label: 'PET', color: palette.pet },
+  { id: 1, label: 'Plastic', color: palette.plastic },
+  { id: 2, label: 'Other', color: palette.other },
 ];
 const CORRECT_BIN: Record<ChipId, number> = { cap: 1, wrapper: 1, body: 0 };
 const HINTS: Record<ChipId, string> = {
@@ -342,7 +343,7 @@ export function SpikeScreen() {
         </View>
         {phase === 'belt' && (
           <View style={styles.tapHint}>
-            <Pulse size={76} color={C.gold} />
+            <Pulse size={76} color={palette.gold} />
             <Text style={styles.tapText}>tap the bottle</Text>
           </View>
         )}
@@ -402,7 +403,7 @@ export function SpikeScreen() {
             )}
             {step === 'prep' && !capGone && (
               <View style={{ position: 'absolute', left: SW / 2 - 38, top: BY - 52 }}>
-                <Pulse size={76} color={C.gold} />
+                <Pulse size={76} color={palette.gold} />
               </View>
             )}
 
@@ -414,21 +415,21 @@ export function SpikeScreen() {
             )}
             {step === 'prep' && !wrapGone && (
               <View style={{ position: 'absolute', left: SW / 2 - 38, top: BY + 108 }}>
-                <Pulse size={76} color={C.gold} />
+                <Pulse size={76} color={palette.gold} />
               </View>
             )}
 
             {/* parts chips */}
             {capChip && !sortedIds.includes('cap') && (
               <GestureDetector gesture={chipPan('cap', capTx, capTy, CAP.x, CAP.y, CAP.w, CAP.h, null)}>
-                <Animated.View style={[styles.chip, { left: CAP.x, top: CAP.y, width: CAP.w, height: CAP.h, backgroundColor: C.cap }, capStyle]}>
+                <Animated.View style={[styles.chip, { left: CAP.x, top: CAP.y, width: CAP.w, height: CAP.h, backgroundColor: palette.cap }, capStyle]}>
                   <Text style={styles.chipLabel}>cap</Text>
                 </Animated.View>
               </GestureDetector>
             )}
             {wrapChip && !sortedIds.includes('wrapper') && (
               <GestureDetector gesture={chipPan('wrapper', wrapTx, wrapTy, WRAP.x, WRAP.y, WRAP.w, WRAP.h, null)}>
-                <Animated.View style={[styles.chip, { left: WRAP.x, top: WRAP.y, width: WRAP.w, height: WRAP.h, backgroundColor: C.wrapper }, wrapStyle]}>
+                <Animated.View style={[styles.chip, { left: WRAP.x, top: WRAP.y, width: WRAP.w, height: WRAP.h, backgroundColor: palette.leaf }, wrapStyle]}>
                   <Text style={styles.chipLabel}>label</Text>
                 </Animated.View>
               </GestureDetector>
@@ -454,24 +455,24 @@ export function SpikeScreen() {
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: C.bg },
+  root: { flex: 1, backgroundColor: palette.paper },
   header: { paddingTop: 64, alignItems: 'center' },
-  title: { fontSize: 30, fontWeight: '800', color: C.ink, letterSpacing: 6 },
-  sub: { fontSize: 13, color: C.sub, marginTop: 4 },
+  title: { fontFamily: 'BalsamiqSans_700Bold', fontSize: 30, fontWeight: '800', color: palette.bark, letterSpacing: 6 },
+  sub: { fontFamily: 'BalsamiqSans_400Regular', fontSize: 13, color: palette.fog, marginTop: 4 },
   beltWrap: { flex: 1, justifyContent: 'center', alignItems: 'center' },
   belt: {
     width: SW - 48,
     height: 130,
-    backgroundColor: C.belt,
+    backgroundColor: palette.belt,
     borderRadius: 18,
     justifyContent: 'center',
     alignItems: 'center',
   },
   beltBottle: { padding: 8 },
   tapHint: { marginTop: 26, alignItems: 'center', justifyContent: 'center', height: 90 },
-  tapText: { position: 'absolute', fontSize: 14, fontWeight: '700', color: C.ink },
+  tapText: { fontFamily: 'BalsamiqSans_700Bold', position: 'absolute', fontSize: 14, fontWeight: '700', color: palette.bark },
   legend: { paddingBottom: 110, alignItems: 'center' },
-  legendText: { fontSize: 12, color: C.sub },
+  legendText: { fontFamily: 'BalsamiqSans_400Regular', fontSize: 12, color: palette.fog },
   doneCard: {
     marginTop: 26,
     backgroundColor: '#fff',
@@ -483,32 +484,35 @@ const styles = StyleSheet.create({
     shadowRadius: 12,
     shadowOffset: { width: 0, height: 4 },
   },
-  doneTitle: { fontSize: 18, fontWeight: '800', color: C.ink },
-  doneSub: { fontSize: 14, color: C.sub, marginTop: 6 },
+  doneTitle: { fontFamily: 'BalsamiqSans_700Bold', fontSize: 18, fontWeight: '800', color: palette.bark },
+  doneSub: { fontFamily: 'BalsamiqSans_400Regular', fontSize: 14, color: palette.fog, marginTop: 6 },
   replay: {
     marginTop: 14,
-    backgroundColor: C.ink,
+    backgroundColor: palette.bark,
     borderRadius: 12,
     paddingHorizontal: 22,
     paddingVertical: 12,
   },
-  replayText: { color: '#fff', fontWeight: '700', fontSize: 15 },
+  replayText: { fontFamily: 'BalsamiqSans_700Bold', color: '#fff', fontWeight: '700', fontSize: 15 },
   modalWrap: { position: 'absolute', left: 0, right: 0, top: 0, bottom: 0 },
   backdrop: {
     position: 'absolute', left: 0, right: 0, top: 0, bottom: 0,
-    backgroundColor: 'rgba(46,36,28,0.55)',
+    backgroundColor: palette.scrim,
   },
   modalContent: { position: 'absolute', left: 0, right: 0, top: 0, bottom: 0 },
   stepKicker: {
+    fontFamily: 'BalsamiqSans_700Bold',
     textAlign: 'center', marginTop: 84, fontSize: 12, fontWeight: '700',
     letterSpacing: 2, color: '#fff', opacity: 0.85,
   },
   instruction: {
+    fontFamily: 'BalsamiqSans_700Bold',
     textAlign: 'center', marginTop: 8, fontSize: 19, fontWeight: '800',
     color: '#fff', paddingHorizontal: 40,
   },
   hint: {
-    textAlign: 'center', marginTop: 8, fontSize: 15, fontWeight: '600',
+    fontFamily: 'BalsamiqSans_400Regular',
+    textAlign: 'center', marginTop: 8, fontSize: 15,
     color: '#FFD9A8', paddingHorizontal: 40,
   },
   progWrap: { alignItems: 'center', marginTop: 12 },
@@ -516,12 +520,12 @@ const styles = StyleSheet.create({
     width: 220, height: 10, borderRadius: 5,
     backgroundColor: 'rgba(255,255,255,0.25)', overflow: 'hidden',
   },
-  progFill: { height: 10, borderRadius: 5, backgroundColor: C.gold },
+  progFill: { height: 10, borderRadius: 5, backgroundColor: palette.gold },
   chip: {
     position: 'absolute', borderRadius: 12, justifyContent: 'center', alignItems: 'center',
     shadowColor: '#000', shadowOpacity: 0.18, shadowRadius: 8, shadowOffset: { width: 0, height: 3 },
   },
-  chipLabel: { color: '#fff', fontWeight: '800', fontSize: 14 },
+  chipLabel: { fontFamily: 'BalsamiqSans_700Bold', color: '#fff', fontWeight: '800', fontSize: 14 },
   bins: {
     position: 'absolute', left: 0, right: 0, bottom: BIN_BOTTOM,
     flexDirection: 'row', justifyContent: 'center', gap: BIN_GAP,
@@ -530,5 +534,5 @@ const styles = StyleSheet.create({
     width: BIN_W, height: BIN_H, borderRadius: 16,
     justifyContent: 'center', alignItems: 'center',
   },
-  binLabel: { color: '#fff', fontWeight: '800', fontSize: 15 },
+  binLabel: { fontFamily: 'BalsamiqSans_700Bold', color: '#fff', fontWeight: '800', fontSize: 15 },
 })
