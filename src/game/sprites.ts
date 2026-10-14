@@ -231,3 +231,53 @@ export const DETERGENT_CAP = require('../../assets/sprites/detergent-cap.png');
 export const DETERGENT_BODY = require('../../assets/sprites/detergent-body.png');
 // foil crumple modal: balled-up state sprite
 export const FOIL_BALL = require('../../assets/sprites/foil-ball.png');
+
+const HUD_ASSETS = [ICON_COIN, ICON_STAR];
+
+export const ONBOARDING_SCREEN_ASSETS = [HOME_BG, SUPERVISOR_AVATAR];
+
+export const HOME_SCREEN_ASSETS = [
+  ...HUD_ASSETS,
+  ...HOME_BG_FRAMES,
+  ICON_ALBUM,
+  ICON_MAP,
+  ICON_PLAY,
+  ICON_SETTINGS,
+];
+
+export const MAP_SCREEN_ASSETS = [ICON_MAP, ...Object.values(CITY_ART)];
+
+export const RULES_SCREEN_ASSETS = [
+  ...HUD_ASSETS,
+  ...Object.values(BIN_SPRITES),
+  ICON_BACK,
+  ICON_PIN,
+  ICON_RULEBOOK,
+  ICON_SETTINGS,
+  ICON_START,
+  PORTLAND_BG,
+];
+
+export const BELT_SCREEN_ASSETS = [
+  ...HUD_ASSETS,
+  ...Object.values(BIN_SPRITES),
+  BELT_BG,
+  ICON_AUTUMN,
+  ICON_PAUSE,
+  ICON_SETTINGS,
+  ICON_SPRING,
+  ICON_STREAK,
+  ICON_SUMMER,
+  ICON_WINTER,
+  PORTLAND_BG,
+  require('../../assets/extra/sink.png'),
+  require('../../assets/extra/sink-on.png'),
+  require('../../assets/extra/prep-tray.png'),
+  require('../../assets/extra/table.png'),
+];
+
+export const APP_START_ASSETS = [
+  ...ONBOARDING_SCREEN_ASSETS,
+  ...HOME_SCREEN_ASSETS,
+  ...MAP_SCREEN_ASSETS,
+];

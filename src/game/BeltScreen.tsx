@@ -1,5 +1,11 @@
 import * as Haptics from "expo-haptics";
-import { memo, useEffect, useRef, useState } from "react";
+import {
+  memo,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import {
   Image,
   ImageBackground,
@@ -79,8 +85,10 @@ import {
   ICON_STREAK,
   ICON_SUMMER,
   ICON_WINTER,
+  ITEM_SPRITES,
 } from "./sprites";
 import { spriteTuningFor } from "./spriteSizes";
+import { useImageLoadGate } from "./useImageLoadGate";
 import { WineModal } from "./WineModal";
 
 /*
@@ -507,12 +515,16 @@ export function BeltScreen({
   endless,
   onShiftEnd,
   onQuit,
+  onAssetsReady,
+  onAssetsProgress,
 }: {
   regionId: string | string[];
   title: string;
   endless?: boolean;
   onShiftEnd: (r: ShiftResult) => void;
   onQuit: () => void;
+  onAssetsReady?: () => void;
+  onAssetsProgress?: (done: number, total: number) => void;
 }) {
   const beltSpeed = endless ? SPEED : SHIFT_SPEED;
   const [pool, setPool] = useState<GameItem[] | null>(null);
@@ -958,6 +970,10 @@ export function BeltScreen({
     const def = findDef(defId);
     setItems((prev) => prev.filter((i) => i.key !== key));
     clearDanger(key);
+    if (!def) {
+      setResolved((r) => r + 1);
+      return;
+    }
     const item: SinkItem = {
       key,
       def,
@@ -1095,6 +1111,38 @@ export function BeltScreen({
   const isPortland = (Array.isArray(regionId) ? regionId : [regionId]).includes(
     "portland",
   );
+  const poolSprites = useMemo(() => {
+    if (!pool) return [];
+    const seen = new Set<string>();
+    return pool.flatMap((item) => {
+      const source = ITEM_SPRITES[item.id];
+      if (!source || seen.has(item.id)) return [];
+      seen.add(item.id);
+      return [{ id: item.id, source }];
+    });
+  }, [pool]);
+  const requiredImages = useMemo(
+    () => [
+      "settings",
+      "pause",
+      "table",
+      "belt",
+      "sink",
+      "sink-on",
+      "tray",
+      ...(isPortland ? ["background"] : []),
+      ...(seasonIcon ? ["season"] : []),
+      ...(endless ? [] : ["streak"]),
+      ...BINS.map((b) => `bin-${b.id}`),
+      ...poolSprites.map((sprite) => `item-${sprite.id}`),
+    ],
+    [endless, isPortland, poolSprites, seasonIcon],
+  );
+  const markLoaded = useImageLoadGate({
+    keys: pool ? requiredImages : [],
+    onProgress: onAssetsProgress,
+    onReady: onAssetsReady,
+  });
 
   // title is "Day N" (global shift count) or "ENDLESS" — rendered as-is
 
@@ -1114,6 +1162,7 @@ export function BeltScreen({
           source={PORTLAND_BG}
           style={{ position: "absolute", left: 0, right: 0, top: 0, bottom: 0 }}
           resizeMode="cover"
+          onLoadEnd={() => markLoaded("background")}
         />
       )}
       {/* top row: lifetime numbers + controls */}
@@ -1135,6 +1184,7 @@ export function BeltScreen({
               source={ICON_SETTINGS}
               style={styles.settingsIcon}
               resizeMode="contain"
+              onLoadEnd={() => markLoaded("settings")}
             />
           </Pressable>
           <Pressable
@@ -1150,6 +1200,7 @@ export function BeltScreen({
               source={ICON_PAUSE}
               style={styles.pauseIcon}
               resizeMode="contain"
+              onLoadEnd={() => markLoaded("pause")}
             />
           </Pressable>
         </View>
@@ -1162,6 +1213,7 @@ export function BeltScreen({
               source={seasonIcon}
               style={styles.seasonIcon}
               resizeMode="contain"
+              onLoadEnd={() => markLoaded("season")}
             />
           )}
           <Text
@@ -1198,6 +1250,7 @@ export function BeltScreen({
                 source={ICON_STREAK}
                 style={styles.streakIcon}
                 resizeMode="contain"
+                onLoadEnd={() => markLoaded("streak")}
               />
               <Text style={styles.statText}>×{streak}</Text>
             </>
@@ -1226,6 +1279,7 @@ export function BeltScreen({
           bottom: 0,
         }}
         resizeMode="cover"
+        onLoadEnd={() => markLoaded("table")}
       />
       {/* belt: single texture + rumble */}
       <Animated.View
@@ -1239,6 +1293,7 @@ export function BeltScreen({
           source={BELT_BG}
           style={{ width: SW, height: BELT_H }}
           resizeMode="stretch"
+          onLoadEnd={() => markLoaded("belt")}
         />
       </Animated.View>
       {/* danger flash: sibling with explicit belt height */}
@@ -1256,12 +1311,31 @@ export function BeltScreen({
         source={sinkItems.length > 0 ? SINK_ON_IMG : SINK_IMG}
         style={[zoneStyle(SINK_ART_RECT), styles.artShadow]}
         resizeMode="contain"
+        onLoadEnd={() =>
+          markLoaded(sinkItems.length > 0 ? "sink-on" : "sink")
+        }
       />
       <Image
         source={TRAY_IMG}
         style={[zoneStyle(TRAY_ART_RECT), styles.artShadow]}
         resizeMode="contain"
+        onLoadEnd={() => markLoaded("tray")}
       />
+      <Image
+        source={SINK_ON_IMG}
+        style={styles.hiddenPreloadImage}
+        resizeMode="contain"
+        onLoadEnd={() => markLoaded("sink-on")}
+      />
+      {poolSprites.map((sprite) => (
+        <Image
+          key={sprite.id}
+          source={sprite.source}
+          style={styles.hiddenPreloadImage}
+          resizeMode="contain"
+          onLoadEnd={() => markLoaded(`item-${sprite.id}`)}
+        />
+      ))}
 
       {/* items */}
       {items.map((it) => (
@@ -1321,6 +1395,7 @@ export function BeltScreen({
               source={BIN_SPRITES[b.id]}
               style={[{ width: BIN_W, height: BIN_H }, styles.artShadow]}
               resizeMode="contain"
+              onLoadEnd={() => markLoaded(`bin-${b.id}`)}
             />
           </View>
         ))}
@@ -1404,7 +1479,10 @@ const styles = StyleSheet.create({
   topActions: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 1,
+    gap: 8,
+  },
+  settingsBtn: {
+    padding: 4,
   },
   settingsIcon: {
     width: 42,
@@ -1542,6 +1620,12 @@ const styles = StyleSheet.create({
     left: 0,
     width: 26,
     backgroundColor: "#D95F4B",
+  },
+  hiddenPreloadImage: {
+    position: "absolute",
+    width: 1,
+    height: 1,
+    opacity: 0,
   },
   item: {
     position: "absolute",

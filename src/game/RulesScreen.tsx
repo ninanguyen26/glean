@@ -31,6 +31,7 @@ import {
   ICON_START,
   PORTLAND_BG,
 } from "./sprites";
+import { useImageLoadGate } from "./useImageLoadGate";
 
 /* Phase 6: pre-shift rules card — streams, house rules, then start. */
 
@@ -43,12 +44,16 @@ export function RulesScreen({
   region,
   onStart,
   onBack,
+  onAssetsReady,
+  onAssetsProgress,
 }: {
   region: RegionDef;
   day: number;
   globalDay: number;
   onStart: () => void;
   onBack: () => void;
+  onAssetsReady?: () => void;
+  onAssetsProgress?: (done: number, total: number) => void;
 }) {
   const [settingsOpen, setSettingsOpen] = useState(false);
 
@@ -69,6 +74,19 @@ export function RulesScreen({
   }));
 
   const tierCard = getTierCard(region.tier ?? "tier1");
+  const markLoaded = useImageLoadGate({
+    keys: [
+      "settings",
+      "back",
+      "pin",
+      "rulebook",
+      "start",
+      ...(region.id === "portland" ? ["background"] : []),
+      ...region.streams.map((stream) => `bin-${stream}`),
+    ],
+    onReady: onAssetsReady,
+    onProgress: onAssetsProgress,
+  });
 
   const body = (
     <>
@@ -91,6 +109,7 @@ export function RulesScreen({
                 source={ICON_SETTINGS}
                 style={styles.settingsIcon}
                 resizeMode="contain"
+                onLoadEnd={() => markLoaded("settings")}
               />
             </Pressable>
             <Pressable
@@ -106,6 +125,7 @@ export function RulesScreen({
                 source={ICON_BACK}
                 style={styles.backIcon}
                 resizeMode="contain"
+                onLoadEnd={() => markLoaded("back")}
               />
             </Pressable>
           </View>
@@ -122,6 +142,7 @@ export function RulesScreen({
                 source={ICON_PIN}
                 style={styles.locationIcon}
                 resizeMode="contain"
+                onLoadEnd={() => markLoaded("pin")}
               />
               <Text style={styles.locationName}>{region.name}</Text>
             </View>
@@ -138,6 +159,7 @@ export function RulesScreen({
                         source={BIN_SPRITES[s]}
                         style={styles.binImage}
                         resizeMode="contain"
+                        onLoadEnd={() => markLoaded(`bin-${s}`)}
                       />
                     </View>
                     <View style={styles.streamText}>
@@ -159,6 +181,7 @@ export function RulesScreen({
                 source={ICON_RULEBOOK}
                 style={styles.rulebookIcon}
                 resizeMode="contain"
+                onLoadEnd={() => markLoaded("rulebook")}
               />
               <Text style={styles.rulesTitle}>House Rules</Text>
             </View>
@@ -183,6 +206,7 @@ export function RulesScreen({
               source={ICON_START}
               style={styles.startIcon}
               resizeMode="contain"
+              onLoadEnd={() => markLoaded("start")}
             />
           </Animated.View>
         </Pressable>
@@ -196,6 +220,7 @@ export function RulesScreen({
         source={PORTLAND_BG}
         style={styles.root}
         resizeMode="cover"
+        onLoadEnd={() => markLoaded("background")}
       >
         {body}
       </ImageBackground>

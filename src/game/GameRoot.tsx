@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import {
   playBeltMusic,
@@ -27,6 +27,13 @@ import {
   getSelectedCity,
   setSelectedCity,
 } from './db';
+import { preloadAssets } from './assetPreload';
+import {
+  APP_START_ASSETS,
+  BELT_SCREEN_ASSETS,
+  HOME_SCREEN_ASSETS,
+  RULES_SCREEN_ASSETS,
+} from './sprites';
 
 /* Phase 6: progression shell nav — map -> rules -> shift -> summary.
    The album is a modal overlay, not a screen, so home/map stays behind it. */
@@ -39,6 +46,11 @@ type Screen =
   | { name: 'endless'; key: number }
   | { name: 'summary'; result: ShiftResult; city: string | null; day: number };
 
+type LoadingState = { label: string; progress: number };
+
+const screenLoadProgress = (done: number, total: number) =>
+  total <= 0 ? 1 : Math.min(1, 0.75 + (done / total) * 0.25);
+
 export function GameRoot() {
   const [screen, setScreen] = useState<Screen>(() =>
     getSetting('onboarding_seen') === '1' ? { name: 'home' } : { name: 'onboarding' },
@@ -47,6 +59,8 @@ export function GameRoot() {
   const [albumOpen, setAlbumOpen] = useState(false);
   const [rewardsReady, setRewardsReady] = useState(false);
   const [hudTick, setHudTick] = useState(0);
+  const [bootReady, setBootReady] = useState(false);
+  const [loading, setLoading] = useState<LoadingState | null>(null);
   // persisted city pick: map taps set it, unlocks auto-pick the new city,
   // endless never touches it.
   const [selectedCity, setSelectedCityState] = useState<string>(() => getSelectedCity());
@@ -65,12 +79,120 @@ export function GameRoot() {
   }, [screen, albumOpen]);
 
   const refresh = () => setProgress(loadProgress());
+  const loadAssetGroup = async (
+    label: string,
+    sources: any[],
+    options?: { keepVisible?: boolean },
+  ) => {
+    setLoading({ label, progress: 0 });
+    await preloadAssets(sources, (done, total) => {
+      setLoading({ label, progress: total === 0 ? 1 : done / total });
+    });
+    if (!options?.keepVisible) {
+      setLoading(null);
+    }
+  };
+  const showRules = async (cityId: string) => {
+    if (loading) return;
+    await loadAssetGroup("Loading rules", RULES_SCREEN_ASSETS, {
+      keepVisible: true,
+    });
+    setScreen({ name: 'rules', city: cityId });
+  };
+  const showHome = async () => {
+    if (loading) return;
+    await loadAssetGroup("Loading home", HOME_SCREEN_ASSETS, {
+      keepVisible: true,
+    });
+    setScreen({ name: 'home' });
+  };
+  const showShift = async (cityId: string, day: number, key = 0) => {
+    if (loading) return;
+    await loadAssetGroup("Loading shift", BELT_SCREEN_ASSETS, {
+      keepVisible: true,
+    });
+    setScreen({ name: 'shift', city: cityId, day, key });
+  };
+  const showEndless = async (key = 0) => {
+    if (loading) return;
+    await loadAssetGroup("Loading shift", BELT_SCREEN_ASSETS, {
+      keepVisible: true,
+    });
+    setScreen({ name: 'endless', key });
+  };
+  const handleRulesAssetsProgress = useCallback((done: number, total: number) => {
+    const progress = screenLoadProgress(done, total);
+    setLoading((prev) => {
+      if (
+        prev?.label === "Loading rules" &&
+        Math.abs(prev.progress - progress) < 0.001
+      ) {
+        return prev;
+      }
+      return { label: "Loading rules", progress };
+    });
+  }, []);
+  const handleRulesAssetsReady = useCallback(() => {
+    setLoading(null);
+  }, []);
+  const handleHomeAssetsProgress = useCallback((done: number, total: number) => {
+    const progress = screenLoadProgress(done, total);
+    setLoading((prev) => {
+      if (
+        prev?.label === "Loading home" &&
+        Math.abs(prev.progress - progress) < 0.001
+      ) {
+        return prev;
+      }
+      return { label: "Loading home", progress };
+    });
+  }, []);
+  const handleHomeAssetsReady = useCallback(() => {
+    setLoading(null);
+  }, []);
+  const handleBeltAssetsProgress = useCallback((done: number, total: number) => {
+    const progress = screenLoadProgress(done, total);
+    setLoading((prev) => {
+      if (
+        prev?.label === "Loading shift" &&
+        Math.abs(prev.progress - progress) < 0.001
+      ) {
+        return prev;
+      }
+      return { label: "Loading shift", progress };
+    });
+  }, []);
+  const handleBeltAssetsReady = useCallback(() => {
+    setLoading(null);
+  }, []);
   useEffect(() => {
     refresh();
     // restore persisted audio/haptic prefs before any music starts
     setSoundMuted(getSetting('sound_muted') === '1');
     setHapticsMuted(getSetting('haptics_muted') === '1');
     setMusicMuted(getSetting('music_muted') === '1');
+    let alive = true;
+    setLoading({ label: "Loading", progress: 0 });
+    preloadAssets(APP_START_ASSETS, (done, total) => {
+      if (alive) {
+        setLoading({
+          label: "Loading",
+          progress: total === 0 ? 1 : done / total,
+        });
+      }
+    }).finally(() => {
+      if (alive) {
+        setBootReady(true);
+        if (screen.name === 'home') {
+          setLoading({ label: "Loading home", progress: 0.75 });
+        } else {
+          setLoading(null);
+        }
+      }
+    });
+    return () => {
+      alive = false;
+    };
   }, []);
 
   // music: belt loop on the belt screen, main theme everywhere else
@@ -89,11 +211,9 @@ export function GameRoot() {
     if (season && !sawRare) bumpRarePity(season.id);
   };
 
-  if (!progress) {
+  if (!progress || !bootReady) {
     return (
-      <View style={styles.loading}>
-        <Text style={styles.loadingText}>Loading…</Text>
-      </View>
+      <LoadingScreen loading={loading} />
     );
   }
 
@@ -104,7 +224,7 @@ export function GameRoot() {
         <OnboardingScreen
           onDone={() => {
             setSetting('onboarding_seen', '1');
-            setScreen({ name: 'home' });
+            void showHome();
           }}
         />
       );
@@ -119,21 +239,23 @@ export function GameRoot() {
         <HomeScreen
           onPlay={() =>
             playCity
-              ? setScreen({ name: 'rules', city: playCity.id })
+              ? void showRules(playCity.id)
               : undefined
           }
           onMap={() => {}}
           onAlbum={() => setAlbumOpen(true)}
           onSelectCity={(cityId) => {
             pickCity(cityId);
-            setScreen({ name: 'rules', city: cityId });
+            void showRules(cityId);
           }}
-          onEndless={() => setScreen({ name: 'endless', key: 0 })}
+          onEndless={() => void showEndless(0)}
           progress={progress}
           rewardsReady={rewardsReady}
           hudTick={hudTick}
           selectedCity={selectedCity}
           bgPaused={albumOpen}
+          onAssetsProgress={handleHomeAssetsProgress}
+          onAssetsReady={handleHomeAssetsReady}
         />
       );
       break;
@@ -148,10 +270,10 @@ export function GameRoot() {
           region={region}
           day={p.nextDay}
           globalDay={globalDay}
-          onStart={() =>
-            setScreen({ name: 'shift', city: screen.city, day: p.nextDay, key: 0 })
-          }
-          onBack={() => setScreen({ name: 'home' })}
+          onStart={() => void showShift(screen.city, p.nextDay)}
+          onBack={() => void showHome()}
+          onAssetsProgress={handleRulesAssetsProgress}
+          onAssetsReady={handleRulesAssetsReady}
         />
       );
       break;
@@ -183,8 +305,10 @@ export function GameRoot() {
           }}
           onQuit={() => {
             refresh();
-            setScreen({ name: 'home' });
+            void showHome();
           }}
+          onAssetsProgress={handleBeltAssetsProgress}
+          onAssetsReady={handleBeltAssetsReady}
         />
       );
       break;
@@ -205,8 +329,10 @@ export function GameRoot() {
           }}
           onQuit={() => {
             refresh();
-            setScreen({ name: 'home' });
+            void showHome();
           }}
+          onAssetsProgress={handleBeltAssetsProgress}
+          onAssetsReady={handleBeltAssetsReady}
         />
       );
       break;
@@ -220,12 +346,12 @@ export function GameRoot() {
           day={screen.day}
           onContinue={() => {
             refresh();
-            setScreen({ name: 'home' });
+            void showHome();
           }}
           onReplay={() =>
             screen.city
-              ? setScreen({ name: 'shift', city: screen.city, day: screen.day, key: Date.now() })
-              : setScreen({ name: 'endless', key: Date.now() })
+              ? void showShift(screen.city, screen.day, Date.now())
+              : void showEndless(Date.now())
           }
         />
       );
@@ -242,12 +368,63 @@ export function GameRoot() {
           onRewardsChanged={() => setHudTick((t) => t + 1)}
         />
       )}
+      {loading && <LoadingScreen loading={loading} overlay />}
+    </View>
+  );
+}
+
+function LoadingScreen({
+  loading,
+  overlay,
+}: {
+  loading: LoadingState | null;
+  overlay?: boolean;
+}) {
+  const progress = Math.max(0.04, Math.min(1, loading?.progress ?? 0));
+  return (
+    <View style={[styles.loading, overlay && styles.loadingOverlay]}>
+      <Text style={styles.loadingText}>{loading?.label ?? "Loading"}</Text>
+      <View style={styles.loadingBarTrack}>
+        <View style={[styles.loadingBarFill, { width: `${progress * 100}%` }]} />
+      </View>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   root: { flex: 1 },
-  loading: { flex: 1, backgroundColor: palette.paper, justifyContent: 'center', alignItems: 'center' },
-  loadingText: { fontFamily: 'BalsamiqSans_700Bold', fontSize: 17, fontWeight: '700', color: palette.fog },
+  loading: {
+    flex: 1,
+    backgroundColor: palette.paper,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  loadingOverlay: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    top: 0,
+    bottom: 0,
+    zIndex: 80,
+  },
+  loadingText: {
+    fontFamily: 'BalsamiqSans_700Bold',
+    fontSize: 17,
+    fontWeight: '700',
+    color: palette.bark,
+    marginBottom: 14,
+  },
+  loadingBarTrack: {
+    width: 220,
+    height: 18,
+    borderRadius: 9,
+    borderWidth: 2,
+    borderColor: palette.bark,
+    backgroundColor: palette.oat,
+    overflow: 'hidden',
+  },
+  loadingBarFill: {
+    height: '100%',
+    backgroundColor: palette.sage,
+  },
 });

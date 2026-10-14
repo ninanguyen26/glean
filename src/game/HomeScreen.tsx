@@ -27,6 +27,7 @@ import {
   ICON_PLAY,
   ICON_SETTINGS,
 } from "./sprites";
+import { useImageLoadGate } from "./useImageLoadGate";
 
 /* Home: MRF background, HUD on top, play icon bottom-center,
    map/album as edge buttons growing out of the right side. */
@@ -42,6 +43,8 @@ export function HomeScreen({
   hudTick,
   selectedCity,
   bgPaused,
+  onAssetsReady,
+  onAssetsProgress,
 }: {
   onPlay: () => void;
   onMap: () => void;
@@ -53,9 +56,23 @@ export function HomeScreen({
   hudTick: number; // refresh token: bumps whenever HUD values may have changed
   selectedCity: string;
   bgPaused?: boolean; // true while a full-screen modal covers home
+  onAssetsReady?: () => void;
+  onAssetsProgress?: (done: number, total: number) => void;
 }) {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [mapOpen, setMapOpen] = useState(false);
+  const markLoaded = useImageLoadGate({
+    keys: [
+      "settings",
+      "play",
+      "map",
+      "album",
+      ...HOME_BG_FRAMES.map((_, i) => `bg-${i}`),
+    ],
+    onReady: onAssetsReady,
+    onProgress: onAssetsProgress,
+  });
+
   // 8-frame MRF background loop (12fps) as a film strip: all 8 frames sit
   // side-by-side in one row and the strip translates on the UI thread.
   // The old setInterval+setFrame re-rendered the whole screen 12x/sec and
@@ -109,6 +126,7 @@ export function HomeScreen({
               source={src}
               style={[styles.bgFrame, { width: SW }]}
               resizeMode="cover"
+              onLoadEnd={() => markLoaded(`bg-${i}`)}
             />
           ))}
         </Animated.View>
@@ -130,6 +148,7 @@ export function HomeScreen({
             source={ICON_SETTINGS}
             style={styles.settingsIcon}
             resizeMode="contain"
+            onLoadEnd={() => markLoaded("settings")}
           />
         </Pressable>
       </View>
@@ -149,6 +168,7 @@ export function HomeScreen({
             source={ICON_PLAY}
             style={styles.playIcon}
             resizeMode="contain"
+            onLoadEnd={() => markLoaded("play")}
           />
         </Animated.View>
       </Pressable>
@@ -167,6 +187,7 @@ export function HomeScreen({
               source={ICON_MAP}
               style={styles.menuIcon}
               resizeMode="contain"
+              onLoadEnd={() => markLoaded("map")}
             />
           </Pressable>
           <Text style={styles.menuLabel}>MODES</Text>
@@ -184,6 +205,7 @@ export function HomeScreen({
               source={ICON_ALBUM}
               style={styles.menuIcon}
               resizeMode="contain"
+              onLoadEnd={() => markLoaded("album")}
             />
           </Pressable>
           {rewardsReady && (
