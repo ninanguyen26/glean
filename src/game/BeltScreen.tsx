@@ -560,7 +560,7 @@ export function BeltScreen({
   const burstId = useRef(0);
   const queueRef = useRef<ItemDef[]>([]);
   const poolRef = useRef<GameItem[]>([]);
-  const lastDrawRef = useRef(-1);
+  const lastDrawRef = useRef<string | null>(null);
   const dangerKeysRef = useRef<Set<number>>(new Set());
   const lessonsRef = useRef(new Map<string, string>());
   const endedRef = useRef(false);
@@ -646,8 +646,30 @@ export function BeltScreen({
     }
   }, [regionKey]);
 
+  // 5/4/3 rarity weights for city items: common x5, uncommon x3, signature x1
+  // 30% of non-seasonal spawns are city items, 70% universal
+  const CITY_SPAWN_RATE = 0.3;
+  const CITY_RARITY_WEIGHT: Record<string, number> = {
+    common: 5,
+    uncommon: 3,
+    rare: 1,
+  };
+  const drawWeightedCity = (items: GameItem[]): GameItem => {
+    const total = items.reduce(
+      (sum, it) => sum + (CITY_RARITY_WEIGHT[it.rarity ?? "common"] ?? 1),
+      0,
+    );
+    let r = Math.random() * total;
+    for (const it of items) {
+      r -= CITY_RARITY_WEIGHT[it.rarity ?? "common"] ?? 1;
+      if (r <= 0) return it;
+    }
+    return items[items.length - 1];
+  };
+
   // random draw from the spawnable pool (complex items only once their
-  // mechanic exists; twist-peel, pull-peel and tap do)
+  // mechanic exists; twist-peel, pull-peel and tap do).
+  // 30% city items (weighted 5/3/1 by rarity), 70% universal (uniform).
   const drawFromPool = (p: GameItem[]): GameItem => {
     const spawnable = p.filter(
       (it) =>
@@ -656,10 +678,26 @@ export function BeltScreen({
         it.mechanic === "pull-peel" ||
         it.mechanic === "tap",
     );
-    let i = Math.floor(Math.random() * spawnable.length);
-    if (i === lastDrawRef.current) i = (i + 1) % spawnable.length;
-    lastDrawRef.current = i;
-    return spawnable[i];
+    const cityItems = spawnable.filter((it) => it.region !== "universal");
+    const universalItems = spawnable.filter(
+      (it) => it.region === "universal",
+    );
+    let picked: GameItem;
+    if (cityItems.length > 0 && Math.random() < CITY_SPAWN_RATE) {
+      picked = drawWeightedCity(cityItems);
+    } else {
+      const pool = universalItems.length > 0 ? universalItems : spawnable;
+      let i = Math.floor(Math.random() * pool.length);
+      if (pool[i].id === lastDrawRef.current) i = (i + 1) % pool.length;
+      picked = pool[i];
+    }
+    // avoid immediate repeat across draws
+    if (picked.id === lastDrawRef.current) {
+      const others = spawnable.filter((it) => it.id !== picked.id);
+      if (others.length > 0) picked = others[Math.floor(Math.random() * others.length)];
+    }
+    lastDrawRef.current = picked.id;
+    return picked;
   };
 
   // single draw: seasonal roll first (replaces a universal spawn), else pool

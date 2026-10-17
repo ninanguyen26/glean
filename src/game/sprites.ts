@@ -127,7 +127,7 @@ export const ITEM_SPRITES: Record<string, any> = {
   'bubble-bottle': require('../../assets/sprites/seasonal/spring/bubble-bottle.png'),
   'garden-hose': require('../../assets/sprites/seasonal/spring/garden-hose.png'),
   'broken-kite': require('../../assets/sprites/seasonal/spring/broken-kite.png'),
-  // portland (9 items)
+  // portland (12 items)
   umbrella: require('../../assets/sprites/cities/portland/umbrella.png'),
   'rain-boot': require('../../assets/sprites/cities/portland/rain-boot.png'),
   growler: require('../../assets/sprites/cities/portland/growler.png'),
@@ -137,6 +137,9 @@ export const ITEM_SPRITES: Record<string, any> = {
   'wet-news': require('../../assets/sprites/cities/portland/wet-news.png'),
   'pack-rings': require('../../assets/sprites/cities/portland/pack-rings.png'),
   'bike-tube': require('../../assets/sprites/cities/portland/bike-tube.png'),
+  zine: require('../../assets/sprites/cities/portland/folded-zine.png'),
+  bookmark: require('../../assets/sprites/cities/portland/paper-bookmark.png'),
+  'single-sock': require('../../assets/sprites/cities/portland/single-sock.png'),
 };
 
 export const BIN_SPRITES: Record<string, any> = {

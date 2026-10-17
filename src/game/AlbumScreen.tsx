@@ -60,8 +60,14 @@ function tileLabel(
       color: RARITY_COLOR[it.rarity] ?? palette.fog,
     };
   }
-  if (kind === "city" && it.signature) {
-    return { text: "SIGNATURE", color: palette.clay };
+  if (kind === "city" && it.rarity) {
+    if (it.signature) {
+      return { text: "SIGNATURE", color: palette.clay };
+    }
+    return {
+      text: it.rarity.toUpperCase(),
+      color: RARITY_COLOR[it.rarity] ?? palette.fog,
+    };
   }
   return null;
 }
@@ -181,11 +187,23 @@ export function AlbumScreen({
     ];
   } else {
     const regions = getAllRegions();
+    // 5/4/3: common first, then uncommon, then signature;
+    // alphabetical within each group.
+    const CITY_ORDER: Record<string, number> = {
+      common: 0,
+      uncommon: 1,
+      rare: 2,
+    };
     sections = regions.map((r) => ({
       title: r.name.toUpperCase(),
       kind: "city" as const,
       group: r.id,
-      items: getCityItems(r.id),
+      items: getCityItems(r.id).sort((a, b) => {
+        const oa = CITY_ORDER[a.rarity ?? "common"] ?? 2;
+        const ob = CITY_ORDER[b.rarity ?? "common"] ?? 2;
+        if (oa !== ob) return oa - ob;
+        return a.name.localeCompare(b.name);
+      }),
     }));
     chips = [
       { id: "all", label: "ALL" },

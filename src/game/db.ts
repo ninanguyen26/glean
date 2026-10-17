@@ -17,7 +17,7 @@ const SEED: GameItem[] = require('../../data/seed/items.json').items.map((it: an
 }));
 const REGION_SEED: RegionDef[] = require('../../data/seed/regions.json').regions;
 const TIER_SEED: TierDef[] = require('../../data/seed/tiers.json').tiers;
-const DB_VERSION = 31;
+const DB_VERSION = 32;
 
 export interface SeasonItemSeed {
   id: string;
